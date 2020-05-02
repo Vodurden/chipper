@@ -85,7 +85,7 @@ impl Chip8 {
     pub fn read_opcode(&self) -> Opcode {
         let pc = self.pc as usize;
         let opcode_bytes = [self.memory[pc], self.memory[pc+1]];
-        Opcode::from_u8_bytes(&opcode_bytes)
+        Opcode::from_bytes(&opcode_bytes)
     }
 
     const FONTSET: [u8; 80] = [
