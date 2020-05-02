@@ -70,6 +70,12 @@ impl Chip8 {
         chip8
     }
 
+    pub fn new_with_rom(rom_bytes: Vec<u8>) -> Chip8 {
+        let mut chip8 = Chip8::new();
+        chip8.load_rom(rom_bytes);
+        chip8
+    }
+
     /// Returns a Chip8 with _no initialized memory_
     pub fn empty() -> Chip8 {
         Chip8 {
@@ -121,15 +127,15 @@ impl Chip8 {
 
     fn read_opcode(&self) -> Opcode {
         let pc = self.pc as usize;
-        println!("{:?}", pc);
         let opcode_bytes = [self.memory[pc], self.memory[pc+1]];
-        println!("{:x?}", opcode_bytes);
         Opcode::from_bytes(&opcode_bytes)
     }
 
     fn execute_opcode(&mut self, opcode: Opcode) {
         match opcode {
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
+            Opcode::AddConstant { x, value } => self.v[x as usize] += value,
+            Opcode::Store { x, y } => self.v[x as usize] = self.v[y as usize],
 
             // TODO: Exhausive matching
             _ => panic!("Unsupported Opcode!"),
@@ -143,11 +149,41 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn exec_store_constant() {
-        let mut chip8 = Chip8::new();
-        chip8.load_rom(vec![0x60, 0x0F]);
+    pub fn program_counter_increases_after_cycle() {
+        let mut chip8 = Chip8::new_with_rom(vec![0x60, 0x0F]);
+
+        assert_eq!(chip8.pc, 0x200);
+        chip8.cycle();
+        assert_eq!(chip8.pc, 0x202);
+    }
+
+    #[test]
+    pub fn store_constant() {
+        let mut chip8 = Chip8::new_with_rom(vec![0x60, 0x0F]);
         chip8.cycle();
 
         assert_eq!(chip8.v[0], 0x0F);
+    }
+
+    #[test]
+    pub fn add_constant() {
+        let mut chip8 = Chip8::new_with_rom(vec![0x71, 0x0F]);
+        chip8.cycle();
+
+        assert_eq!(chip8.v[1], 0x0F);
+    }
+
+    #[test]
+    pub fn store() {
+        let rom = Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 1, value: 0x15 },
+            Opcode::Store { x: 2, y: 1 }
+        ]);
+        let mut chip8 = Chip8::new_with_rom(rom);
+
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.v[2], 0x15);
     }
 }
