@@ -156,8 +156,8 @@ pub enum Opcode {
 
     /// Opcode: `Fx07`
     ///
-    /// Store the value of `Vx` in the delay timer.
-    StoreDelay { x: Register },
+    /// Read the value of the delay timer into `Vx`.
+    ReadDelay { x: Register },
 
     /// Opcode: `Fx0A`
     ///
@@ -166,7 +166,7 @@ pub enum Opcode {
 
     /// Opcode: `Fx15`
     ///
-    /// Set the delay timer to the value of `Vx.`
+    /// Set the delay timer to the value of `Vx`.
     SetDelay { x: Register },
 
     /// Opcode: `Fx18`
@@ -261,7 +261,7 @@ impl Opcode {
             (0xE, x, 0x9, 0xE) => Opcode::SkipIfKeyPressed { x },
             (0xE, x, 0xA, 0x1) => Opcode::SkipIfKeyNotPressed { x },
 
-            (0xF, x, 0x0, 0x7) => Opcode::StoreDelay { x },
+            (0xF, x, 0x0, 0x7) => Opcode::ReadDelay { x },
             (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyPress { x },
             (0xF, x, 0x1, 0x5) => Opcode::SetDelay { x },
             (0xF, x, 0x1, 0x8) => Opcode::StoreSound { x },
@@ -310,7 +310,7 @@ impl Opcode {
             Opcode::SkipIfKeyPressed { x } => 0xE09E | ((*x as u16) << 8),
             Opcode::SkipIfKeyNotPressed { x } => 0xE0A1 | ((*x as u16) << 8),
 
-            Opcode::StoreDelay { x } => 0xF007 | ((*x as u16) << 8),
+            Opcode::ReadDelay { x } => 0xF007 | ((*x as u16) << 8),
             Opcode::WaitForKeyPress { x } => 0xF00A | ((*x as u16) << 8),
             Opcode::SetDelay { x } => 0x0F015 | ((*x as u16) << 8),
             Opcode::StoreSound { x } => 0xF018 | ((*x as u16) << 8),
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn to_u16_store_delay() {
-        assert_eq!(Opcode::StoreDelay { x: 0xA }.to_u16(), 0xFA07);
+        assert_eq!(Opcode::ReadDelay { x: 0xA }.to_u16(), 0xFA07);
     }
 
     #[test]
@@ -651,7 +651,7 @@ mod tests {
 
     #[test]
     fn from_u16_store_delay() {
-        assert_eq!(Opcode::from_u16(0xFA07), Opcode::StoreDelay { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA07), Opcode::ReadDelay { x: 0xA });
     }
 
     #[test]

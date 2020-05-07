@@ -141,41 +141,61 @@ impl Chip8 {
 
     fn execute_opcode(&mut self, opcode: Opcode) {
         match opcode {
-            Opcode::ClearScreen => self.gfx = [[0; 64]; 32],
-
+            // Flow Control Opcodes - Opcodes for manipulating the program counter
             Opcode::CallSubroutine(address) => self.op_call_subroutine(address),
             Opcode::Return => self.op_return(),
-
             Opcode::Jump(address) => self.pc = address,
             Opcode::JumpWithOffset(address) => self.pc = address + (self.v[0] as u16),
 
+            // Conditional Opcodes - Opcodes for conditionally executing parts of the program
             Opcode::SkipNextIfEqual { x, value } => self.op_skip_next_if(self.v[x as usize] == value),
             Opcode::SkipNextIfNotEqual { x, value } => self.op_skip_next_if(self.v[x as usize] != value),
             Opcode::SkipNextIfRegisterEqual { x, y } => self.op_skip_next_if(self.v[x as usize] == self.v[y as usize]),
             Opcode::SkipNextIfRegisterNotEqual { x, y } => self.op_skip_next_if(self.v[x as usize] != self.v[y as usize]),
 
+            // Keypad Opcodes - Opcodes for capturing user input
+            Opcode::SkipIfKeyPressed { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::SkipIfKeyNotPressed { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::WaitForKeyPress { x: _ } => panic!("Unsupported Opcode"),
+
+            // Register Opcodes - Opcodes to manipulate the value of the `V` registers
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
             Opcode::AddConstant { x, value } => self.v[x as usize] += value,
-
             Opcode::Store { x, y } => self.v[x as usize] = self.v[y as usize],
-            Opcode::StoreAddress(address) => self.i = address,
 
+            // Index Opcodes - Opcodes to manipulate the value of `I`
+            Opcode::StoreAddress(address) => self.i = address,
+            Opcode::AddIndex { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::StoreBCD { x: _ } => panic!("Unsupported Opcode"),
+
+            // Sound Opcodes - Opcodes for manipulating sound
+            Opcode::StoreSound { x } => self.sound_timer = self.v[x as usize],
+
+            // Time Opcodes
+            Opcode::SetDelay { x } => self.delay_timer = self.v[x as usize],
+            Opcode::ReadDelay { x } => self.v[x as usize] = self.delay_timer,
+
+            // Random Opcode
+            Opcode::Random { x: _, mask: _ } => panic!("Unsupported Opcode"),
+
+            // Math Opcodes
             Opcode::Or { x, y } => self.v[x as usize] = self.v[x as usize] | self.v[y as usize],
             Opcode::And { x, y } => self.v[x as usize] = self.v[x as usize] & self.v[y as usize],
             Opcode::Xor { x, y } => self.v[x as usize] = self.v[x as usize] ^ self.v[y as usize],
-
             Opcode::Add { x, y } => self.op_add(x, y),
             Opcode::SubtractYFromX { x, y } => self.op_subtract_y_from_x(x, y),
             Opcode::SubtractXFromY { x, y } => self.op_subtract_x_from_y(x, y),
             Opcode::ShiftRight { x, y } => self.op_shift_right(x, y),
             Opcode::ShiftLeft { x, y } => self.op_shift_left(x, y),
 
+            // Drawing Opcodes - Opcodes to draw to the screen
+            Opcode::ClearScreen => self.gfx = [[0; 64]; 32],
             Opcode::Draw { x, y, n } => self.op_draw(x, y, n),
-
             Opcode::SetIndexToFontData { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
 
-            // TODO: Exhausive matching
-            _ => panic!("Unsupported Opcode!"),
+            // Memory Opcodes - Opcodes to read & write memory
+            Opcode::WriteMemory { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::ReadMemory { x: _ } => panic!("Unsupported Opcode"),
         }
     }
 
