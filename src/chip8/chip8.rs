@@ -139,16 +139,32 @@ impl Chip8 {
 
     fn execute_opcode(&mut self, opcode: Opcode) {
         match opcode {
+            Opcode::ClearScreen => self.gfx = [[0; 64]; 32],
+
+            Opcode::SkipNextIfEqual { x, value } => self.skip_next_if(self.v[x as usize] == value),
+            Opcode::SkipNextIfNotEqual { x, value } => self.skip_next_if(self.v[x as usize] != value),
+            Opcode::SkipNextIfRegisterEqual { x, y } => self.skip_next_if(self.v[x as usize] == self.v[y as usize]),
+            Opcode::SkipNextIfRegisterNotEqual { x, y } => self.skip_next_if(self.v[x as usize] != self.v[y as usize]),
+
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
             Opcode::AddConstant { x, value } => self.v[x as usize] += value,
+
             Opcode::Store { x, y } => self.v[x as usize] = self.v[y as usize],
+
             Opcode::StoreAddress(address) => self.i = address,
+
             Opcode::Draw { x, y, n } => self.draw(x, y, n),
 
             Opcode::SetIndexToFontData { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
 
             // TODO: Exhausive matching
             _ => panic!("Unsupported Opcode!"),
+        }
+    }
+
+    fn skip_next_if(&mut self, expression: bool) {
+        if expression {
+            self.pc += 2
         }
     }
 
@@ -189,6 +205,84 @@ mod tests {
     }
 
     #[test]
+    pub fn op_clear_screen() {
+        let mut rom: Vec<u8> = Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + (2 * 3)), // Store the address of the first byte below
+            Opcode::Draw { x: 0, y: 0, n: 0x1 },
+            Opcode::ClearScreen
+        ]);
+        rom.extend(vec![0b11110000]);
+
+        let mut chip8 = Chip8::new_with_rom(rom);
+        chip8.cycle();
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.gfx[0][0..8], [0,0,0,0,0,0,0,0]);
+    }
+
+    #[test]
+    pub fn op_skip_next_if_equal() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::SkipNextIfEqual { x: 0x0, value: 0x0 }
+        ]));
+
+        assert_eq!(chip8.pc, 0x200);
+        chip8.cycle();
+        assert_eq!(chip8.pc, 0x204);
+    }
+
+    #[test]
+    pub fn op_skip_next_if_equal_dont_skip_if_not_equal() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::SkipNextIfEqual { x: 0x0, value: 0xA }
+        ]));
+
+        assert_eq!(chip8.pc, 0x200);
+        chip8.cycle();
+        assert_eq!(chip8.pc, 0x202);
+    }
+
+    #[test]
+    pub fn op_skip_next_if_not_equal() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::SkipNextIfNotEqual { x: 0x0, value: 0x1 }
+        ]));
+
+        assert_eq!(chip8.pc, 0x200);
+        chip8.cycle();
+        assert_eq!(chip8.pc, 0x204);
+    }
+
+    #[test]
+    pub fn op_skip_next_if_register_equal() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0xA },
+            Opcode::StoreConstant { x: 0x1, value: 0xA },
+            Opcode::SkipNextIfRegisterEqual { x: 0x0, y: 0x1 }
+        ]));
+
+        assert_eq!(chip8.pc, 0x200);
+        chip8.cycle();
+        chip8.cycle();
+        chip8.cycle();
+        assert_eq!(chip8.pc, 0x208);
+    }
+
+    #[test]
+    pub fn op_skip_next_if_register_not_equal() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0xA },
+            Opcode::StoreConstant { x: 0x1, value: 0xB },
+            Opcode::SkipNextIfRegisterNotEqual { x: 0x0, y: 0x1 }
+        ]));
+
+        assert_eq!(chip8.pc, 0x200);
+        chip8.cycle();
+        chip8.cycle();
+        chip8.cycle();
+        assert_eq!(chip8.pc, 0x208);
+    }
 
     #[test]
     pub fn op_store_constant() {
