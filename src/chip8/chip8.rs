@@ -147,10 +147,10 @@ impl Chip8 {
         match opcode {
             Opcode::ClearScreen => self.gfx = [[0; 64]; 32],
 
-            Opcode::SkipNextIfEqual { x, value } => self.skip_next_if(self.v[x as usize] == value),
-            Opcode::SkipNextIfNotEqual { x, value } => self.skip_next_if(self.v[x as usize] != value),
-            Opcode::SkipNextIfRegisterEqual { x, y } => self.skip_next_if(self.v[x as usize] == self.v[y as usize]),
-            Opcode::SkipNextIfRegisterNotEqual { x, y } => self.skip_next_if(self.v[x as usize] != self.v[y as usize]),
+            Opcode::SkipNextIfEqual { x, value } => self.op_skip_next_if(self.v[x as usize] == value),
+            Opcode::SkipNextIfNotEqual { x, value } => self.op_skip_next_if(self.v[x as usize] != value),
+            Opcode::SkipNextIfRegisterEqual { x, y } => self.op_skip_next_if(self.v[x as usize] == self.v[y as usize]),
+            Opcode::SkipNextIfRegisterNotEqual { x, y } => self.op_skip_next_if(self.v[x as usize] != self.v[y as usize]),
 
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
             Opcode::AddConstant { x, value } => self.v[x as usize] += value,
@@ -162,7 +162,11 @@ impl Chip8 {
             Opcode::And { x, y } => self.v[x as usize] = self.v[x as usize] & self.v[y as usize],
             Opcode::Xor { x, y } => self.v[x as usize] = self.v[x as usize] ^ self.v[y as usize],
 
-            Opcode::Draw { x, y, n } => self.draw(x, y, n),
+            Opcode::Add { x, y } => self.op_add(x, y),
+            Opcode::SubtractYFromX { x, y } => self.op_subtract_y_from_x(x, y),
+            Opcode::SubtractXFromY { x, y } => self.op_subtract_x_from_y(x, y),
+
+            Opcode::Draw { x, y, n } => self.op_draw(x, y, n),
 
             Opcode::SetIndexToFontData { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
 
@@ -171,13 +175,31 @@ impl Chip8 {
         }
     }
 
-    fn skip_next_if(&mut self, expression: bool) {
+    fn op_skip_next_if(&mut self, expression: bool) {
         if expression {
             self.pc += 2
         }
     }
 
-    fn draw(&mut self, x: Register, y: Register, n: u8) {
+    fn op_add(&mut self, x: Register, y: Register) {
+        let (result, carry) = self.v[x as usize].overflowing_add(self.v[y as usize]);
+        self.v[x as usize] = result;
+        self.v[0xF] = carry as u8;
+    }
+
+    fn op_subtract_y_from_x(&mut self, x: Register, y: Register) {
+        let (result, carry) = self.v[x as usize].overflowing_sub(self.v[y as usize]);
+        self.v[x as usize] = result;
+        self.v[0xF] = carry as u8;
+    }
+
+    fn op_subtract_x_from_y(&mut self, x: Register, y: Register) {
+        let (result, carry) = self.v[y as usize].overflowing_sub(self.v[x as usize]);
+        self.v[x as usize] = result;
+        self.v[0xF] = carry as u8;
+    }
+
+    fn op_draw(&mut self, x: Register, y: Register, n: u8) {
         self.v[0xF] = 0;
 
         for pixel_y in 0..n {
@@ -355,6 +377,89 @@ mod tests {
 
         assert_eq!(chip8.v[0x0], 0b11100111);
     }
+
+    #[test]
+    pub fn op_add() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0x1 },
+            Opcode::StoreConstant { x: 0x1, value: 0x2 },
+            Opcode::Add { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0x3);
+    }
+
+    #[test]
+    pub fn op_add_overflow() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0xFF },
+            Opcode::StoreConstant { x: 0x1, value: 0xFF },
+            Opcode::Add { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        println!("{:x?}", chip8.v[0x0]);
+        assert_eq!(chip8.v[0x0], 0xFE);
+        assert_eq!(chip8.v[0xF], 0x1);
+    }
+
+    #[test]
+    pub fn op_subtract_y_from_x() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0x5 },
+            Opcode::StoreConstant { x: 0x1, value: 0x1 },
+            Opcode::SubtractYFromX { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0x4);
+    }
+
+    #[test]
+    pub fn op_subtract_y_from_x_overflow() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0x0 },
+            Opcode::StoreConstant { x: 0x1, value: 0x1 },
+            Opcode::SubtractYFromX { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0xFF);
+        assert_eq!(chip8.v[0xF], 0x1);
+    }
+
+    #[test]
+    pub fn op_subtract_x_from_y() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0x1 },
+            Opcode::StoreConstant { x: 0x1, value: 0x5 },
+            Opcode::SubtractXFromY { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0x4);
+    }
+
+    #[test]
+    pub fn op_subtract_x_from_y_overflow() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0x1 },
+            Opcode::StoreConstant { x: 0x1, value: 0x0 },
+            Opcode::SubtractXFromY { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0xFF);
+        assert_eq!(chip8.v[0xF], 0x1);
+    }
+
 
     #[test]
     pub fn op_draw() {

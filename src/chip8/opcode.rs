@@ -77,7 +77,7 @@ pub enum Opcode {
     ///
     /// - Set `Vx` to `Vx - Vy`.
     /// - Set `VF` to 00 if a borrow occurs, otherwise set `VF` to 00.
-    SubtractXFromY { x: Register, y: Register },
+    SubtractYFromX { x: Register, y: Register },
 
     /// Opcode: `8xy6`
     ///
@@ -89,7 +89,7 @@ pub enum Opcode {
     ///
     /// - Set `Vx` to `Vy - Vx`.
     /// - Set `VF` to 00 if a borrow occurs, otherwise set `VF` to 00.
-    SubtractYFromX { x: Register, y: Register },
+    SubtractXFromY { x: Register, y: Register },
 
     /// Opcode: `8xyE`
     ///
