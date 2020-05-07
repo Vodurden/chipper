@@ -119,8 +119,11 @@ pub enum Opcode {
 
     /// Opcode: `Dxyn`
     ///
-    /// - Draw a sprite at position `Vx`, `Vy` with `n` bytes of sprite data starting from the address stored in `I`
+    /// - Draw a sprite at position `Vx`, `Vy`. The spirte has dimensions 8 by `n`
+    /// - The sprite data is read starting from the address stored in `I`.
     /// - Set `VF` to 01 if any set pixels are changed to unset, otherwise set `VF` to 00
+    ///
+    /// When `Draw` is executed it also triggers a screen refresh
     Draw { x: Register, y: Register, n: u8 },
 
     /// Opcode: `Ex9E`

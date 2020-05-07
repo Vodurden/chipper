@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::chip8::Opcode;
+use crate::chip8::{Opcode, Register};
 
 pub struct Chip8 {
     /// Chip-8 memory is segmented into two sections:
@@ -15,7 +15,7 @@ pub struct Chip8 {
     /// Stack holds the addresses to return to when the current subroutine finishes.
     pub stack: [u16; 16],
 
-    pub gfx: [u8; 64 * 32],
+    pub gfx: [[u8; 64]; 32],
 
     pub key: [u8; 16],
 
@@ -44,6 +44,8 @@ pub struct Chip8 {
 }
 
 impl Chip8 {
+    const FONT_START: u16 = 0x50;
+    const FONT_END: u16 = 0xA0;
     const FONTSET: [u8; 80] = [
         0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
         0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -66,7 +68,11 @@ impl Chip8 {
     pub fn new() -> Chip8 {
         let mut chip8 = Chip8::empty();
         chip8.pc = 0x200;
-        chip8.memory[0x50..0xA0].copy_from_slice(&Chip8::FONTSET);
+
+        let font_start = Chip8::FONT_START as usize;
+        let font_end = Chip8::FONT_END as usize;
+        chip8.memory[font_start..font_end].copy_from_slice(&Chip8::FONTSET);
+
         chip8
     }
 
@@ -81,7 +87,7 @@ impl Chip8 {
         Chip8 {
             memory: [0; 4096],
             stack: [0; 16],
-            gfx: [0; 64 * 32],
+            gfx: [[0; 64]; 32],
             key: [0; 16],
 
             v: [0; 16],
@@ -136,12 +142,35 @@ impl Chip8 {
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
             Opcode::AddConstant { x, value } => self.v[x as usize] += value,
             Opcode::Store { x, y } => self.v[x as usize] = self.v[y as usize],
+            Opcode::StoreAddress(address) => self.i = address,
+            Opcode::Draw { x, y, n } => self.draw(x, y, n),
+
+            Opcode::SetIndexToFontData { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
 
             // TODO: Exhausive matching
             _ => panic!("Unsupported Opcode!"),
         }
     }
 
+    fn draw(&mut self, x: Register, y: Register, n: u8) {
+        self.v[0xF] = 0;
+
+        for pixel_y in 0..n {
+            let row_sprite: u8 = self.memory[(self.i + pixel_y as u16) as usize];
+
+            for pixel_x in 0..8 {
+                let bit = (row_sprite >> (7 - pixel_x)) & 0x1;
+                if bit != 0 {
+                    let pixel: &mut u8 = &mut self.gfx[(y + pixel_y) as usize][(x + pixel_x) as usize];
+                    if *pixel == 1 {
+                        self.v[0xF] = 1;
+                    }
+
+                    *pixel ^= 1;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -150,7 +179,9 @@ mod tests {
 
     #[test]
     pub fn program_counter_increases_after_cycle() {
-        let mut chip8 = Chip8::new_with_rom(vec![0x60, 0x0F]);
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0xF }
+        ]));
 
         assert_eq!(chip8.pc, 0x200);
         chip8.cycle();
@@ -158,15 +189,19 @@ mod tests {
     }
 
     #[test]
-    pub fn store_constant() {
-        let mut chip8 = Chip8::new_with_rom(vec![0x60, 0x0F]);
+
+    #[test]
+    pub fn op_store_constant() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0xF }
+        ]));
         chip8.cycle();
 
         assert_eq!(chip8.v[0], 0x0F);
     }
 
     #[test]
-    pub fn add_constant() {
+    pub fn op_add_constant() {
         let mut chip8 = Chip8::new_with_rom(vec![0x71, 0x0F]);
         chip8.cycle();
 
@@ -174,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    pub fn store() {
+    pub fn op_store() {
         let rom = Opcode::to_rom(vec![
             Opcode::StoreConstant { x: 1, value: 0x15 },
             Opcode::Store { x: 2, y: 1 }
@@ -185,5 +220,90 @@ mod tests {
         chip8.cycle();
 
         assert_eq!(chip8.v[2], 0x15);
+    }
+
+    #[test]
+    pub fn op_draw() {
+        let rom = Opcode::to_rom(vec![
+            Opcode::SetIndexToFontData { x: 0x0A },
+            Opcode::Draw { x: 0, y: 0, n: 0x5 }
+        ]);
+        let mut chip8 = Chip8::new_with_rom(rom);
+
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.gfx[0][0..8], [1,1,1,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[1][0..8], [1,0,0,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[2][0..8], [1,1,1,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[3][0..8], [1,0,0,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[4][0..8], [1,0,0,1,0,0,0,0]);
+    }
+
+    #[test]
+    pub fn op_draw_at_offset() {
+        let rom = Opcode::to_rom(vec![
+            Opcode::SetIndexToFontData { x: 0x0A },
+            Opcode::Draw { x: 10, y: 5, n: 0x5 }
+        ]);
+        let mut chip8 = Chip8::new_with_rom(rom);
+
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.gfx[5][10..18], [1,1,1,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[6][10..18], [1,0,0,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[7][10..18], [1,1,1,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[8][10..18], [1,0,0,1,0,0,0,0]);
+        assert_eq!(chip8.gfx[9][10..18], [1,0,0,1,0,0,0,0]);
+    }
+
+    #[test]
+    pub fn op_draw_xors_overlapping_pixels() {
+        let mut rom: Vec<u8> = Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + (2 * 4)), // Store the address of the first byte below
+            Opcode::Draw { x: 0, y: 0, n: 0x1 },
+            Opcode::StoreAddress(0x200 + (2 * 4) + 1), // Store the address of the second byte below
+            Opcode::Draw { x: 0, y: 0, n: 0x1 },
+        ]);
+        rom.extend(vec![0b11110000, 0b01101111]);
+
+        let mut chip8 = Chip8::new_with_rom(rom);
+
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.gfx[0][0..8], [1, 1, 1, 1, 0, 0, 0, 0]);
+
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.gfx[0][0..8], [1, 0, 0, 1, 1, 1, 1, 1]);
+    }
+
+    /// When `draw` overlaps a sprite we expect it to delete the existing pixels and sets `VF` to `1`.
+    ///
+    /// This behavior is commonly used for collision detection
+    #[test]
+    pub fn op_draw_collision_detection() {
+        let mut rom: Vec<u8> = Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + (2 * 4)), // Store the address of the first byte below
+            Opcode::Draw { x: 0, y: 0, n: 0x1 },
+            Opcode::StoreAddress(0x200 + (2 * 4) + 1), // Store the address of the second byte below
+            Opcode::Draw { x: 0, y: 0, n: 0x1 },
+        ]);
+        rom.extend(vec![0b11110000, 0b01101111]);
+
+        let mut chip8 = Chip8::new_with_rom(rom);
+
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.v[0xF], 0);
+
+        chip8.cycle();
+        chip8.cycle();
+
+        assert_eq!(chip8.v[0xF], 1);
     }
 }
