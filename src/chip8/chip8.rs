@@ -147,6 +147,9 @@ impl Chip8 {
         match opcode {
             Opcode::ClearScreen => self.gfx = [[0; 64]; 32],
 
+            Opcode::Jump(address) => self.pc = address,
+            Opcode::JumpWithOffset(address) => self.pc = address + (self.v[0] as u16),
+
             Opcode::SkipNextIfEqual { x, value } => self.op_skip_next_if(self.v[x as usize] == value),
             Opcode::SkipNextIfNotEqual { x, value } => self.op_skip_next_if(self.v[x as usize] != value),
             Opcode::SkipNextIfRegisterEqual { x, y } => self.op_skip_next_if(self.v[x as usize] == self.v[y as usize]),
@@ -262,6 +265,35 @@ mod tests {
         chip8.cycle_n(3);
 
         assert_eq!(chip8.gfx[0][0..8], [0,0,0,0,0,0,0,0]);
+    }
+
+    #[test]
+    pub fn op_jump() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::Jump(0x200 + 4),
+            Opcode::StoreConstant { x: 0x0, value: 0xAA },
+            Opcode::StoreConstant { x: 0x1, value: 0xFF }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0x0);
+        assert_eq!(chip8.v[0x1], 0xFF);
+    }
+
+    #[test]
+    pub fn op_jump_with_offset() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0x6 },
+            Opcode::JumpWithOffset(0x200),
+            Opcode::StoreConstant { x: 0x1, value: 0xAA },
+            Opcode::StoreConstant { x: 0x2, value: 0xFF }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x1], 0x0);
+        assert_eq!(chip8.v[0x2], 0xFF);
     }
 
     #[test]
