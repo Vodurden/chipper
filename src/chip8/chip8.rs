@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::chip8::{Opcode, Register};
+use crate::chip8::{Opcode, Register, Address};
 
 pub struct Chip8 {
     /// Chip-8 memory is segmented into two sections:
@@ -13,7 +13,7 @@ pub struct Chip8 {
     pub memory: [u8; 4096],
 
     /// Stack holds the addresses to return to when the current subroutine finishes.
-    pub stack: [u16; 16],
+    pub stack: Vec<u16>,
 
     pub gfx: [[u8; 64]; 32],
 
@@ -29,9 +29,6 @@ pub struct Chip8 {
 
     /// Program Counter. Points to the currently executing address in `memory`
     pub pc: u16,
-
-    /// Stack Pointer. Points to the topmost level of `stack`
-    pub sp: u8,
 
     /// Delay Timer Register. When non-zero it decrements by 1 at the rate of 60hz.
     pub delay_timer: u8,
@@ -86,14 +83,13 @@ impl Chip8 {
     pub fn empty() -> Chip8 {
         Chip8 {
             memory: [0; 4096],
-            stack: [0; 16],
+            stack: Vec::new(),
             gfx: [[0; 64]; 32],
             key: [0; 16],
 
             v: [0; 16],
             i: 0,
             pc: 0,
-            sp: 0,
 
             delay_timer: 0,
             sound_timer: 0,
@@ -147,6 +143,9 @@ impl Chip8 {
         match opcode {
             Opcode::ClearScreen => self.gfx = [[0; 64]; 32],
 
+            Opcode::CallSubroutine(address) => self.op_call_subroutine(address),
+            Opcode::Return => self.op_return(),
+
             Opcode::Jump(address) => self.pc = address,
             Opcode::JumpWithOffset(address) => self.pc = address + (self.v[0] as u16),
 
@@ -178,6 +177,16 @@ impl Chip8 {
             // TODO: Exhausive matching
             _ => panic!("Unsupported Opcode!"),
         }
+    }
+
+    fn op_call_subroutine(&mut self, address: Address) {
+        self.stack.push(self.pc);
+        self.pc = address;
+    }
+
+    fn op_return(&mut self) {
+        // TODO: Better error handling
+        self.pc = self.stack.pop().expect("Stack Underflow!");
     }
 
     fn op_skip_next_if(&mut self, expression: bool) {
@@ -265,6 +274,29 @@ mod tests {
         chip8.cycle_n(3);
 
         assert_eq!(chip8.gfx[0][0..8], [0,0,0,0,0,0,0,0]);
+    }
+
+    #[test]
+    pub fn op_call_subroutine_and_return() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            // Jump to Main
+            Opcode::Jump(0x200 + 6),
+
+            // Subroutine
+            Opcode::StoreConstant { x: 0xA, value: 0xAA },
+            Opcode::Return,
+
+            // Main
+            Opcode::StoreConstant { x: 0x1, value: 0xFF },
+            Opcode::CallSubroutine(0x200 + 2),
+            Opcode::StoreConstant { x: 0x2, value: 0xBB }
+        ]));
+
+        chip8.cycle_n(6);
+
+        assert_eq!(chip8.v[0x1], 0xFF);
+        assert_eq!(chip8.v[0xA], 0xAA);
+        assert_eq!(chip8.v[0x2], 0xBB);
     }
 
     #[test]
