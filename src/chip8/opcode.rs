@@ -81,8 +81,17 @@ pub enum Opcode {
 
     /// Opcode: `8xy6`
     ///
-    /// - Set `Vx` to `Vy >> 1`.
+    /// This opcode is controversial: For _old_ roms (pre-2005) they tend to assume this behavior:
+    ///
+    /// - Set `Vx` _and_ `Vy` to `Vy >> 1`.
     /// - Set `VF` to the least significant bit prior to the shift.
+    ///
+    /// For newer roms (post-2005) they tend to assume this behavior:
+    ///
+    /// - Set `Vx` to `Vx >> 1`
+    /// - Set `VF` to the least significant bit prior to the shift
+    ///
+    /// Currently we implement the "new" behavior.
     ShiftRight { x: Register, y: Register },
 
     /// Opcode: `8xy7`
@@ -93,8 +102,17 @@ pub enum Opcode {
 
     /// Opcode: `8xyE`
     ///
-    /// - Set `Vx` to `Vy << 1`.
+    /// This opcode is controversial: For _old_ roms (pre-2005) they tend to assume this behavior:
+    ///
+    /// - Set `Vx` _and_ `Vy` to `Vy << 1`.
     /// - Set `VF` to the most significant bit prior to the shift.
+    ///
+    /// For newer roms (post-2005) they tend to assume this behavior:
+    ///
+    /// - Set `Vx` to `Vx << 1`
+    /// - Set `VF` to the most significant bit prior to the shift
+    ///
+    /// Currently we implement the "new" behavior.
     ShiftLeft { x: Register, y: Register },
 
     /// Opcode: `9xy0`

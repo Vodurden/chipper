@@ -165,6 +165,8 @@ impl Chip8 {
             Opcode::Add { x, y } => self.op_add(x, y),
             Opcode::SubtractYFromX { x, y } => self.op_subtract_y_from_x(x, y),
             Opcode::SubtractXFromY { x, y } => self.op_subtract_x_from_y(x, y),
+            Opcode::ShiftRight { x, y } => self.op_shift_right(x, y),
+            Opcode::ShiftLeft { x, y } => self.op_shift_left(x, y),
 
             Opcode::Draw { x, y, n } => self.op_draw(x, y, n),
 
@@ -197,6 +199,18 @@ impl Chip8 {
         let (result, carry) = self.v[y as usize].overflowing_sub(self.v[x as usize]);
         self.v[x as usize] = result;
         self.v[0xF] = carry as u8;
+    }
+
+    fn op_shift_right(&mut self, x: Register, _: Register) {
+        let least_significant_bit = self.v[x as usize] & 0b00000001;
+        self.v[0xF] = least_significant_bit;
+        self.v[x as usize] = self.v[x as usize].wrapping_shr(1);
+    }
+
+    fn op_shift_left(&mut self, x: Register, _: Register) {
+        let most_significant_bit = (self.v[x as usize] >> 7) & 1;
+        self.v[0xF] = most_significant_bit;
+        self.v[x as usize] = self.v[x as usize].wrapping_shl(1);
     }
 
     fn op_draw(&mut self, x: Register, y: Register, n: u8) {
@@ -460,6 +474,55 @@ mod tests {
         assert_eq!(chip8.v[0xF], 0x1);
     }
 
+    #[test]
+    pub fn op_shift_right() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0b00000010 },
+            Opcode::ShiftRight { x: 0x0, y: 0x0 }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0b00000001);
+    }
+
+    #[test]
+    pub fn op_shift_right_capture_msb() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0b00000011 },
+            Opcode::ShiftRight { x: 0x0, y: 0x0 }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0b00000001);
+        assert_eq!(chip8.v[0xF], 0x1);
+    }
+
+    #[test]
+    pub fn op_shift_left() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0b00000011 },
+            Opcode::ShiftLeft { x: 0x0, y: 0x0 }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0b00000110);
+    }
+
+    #[test]
+    pub fn op_shift_left_capture_lsb() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0b10000011 },
+            Opcode::ShiftLeft { x: 0x0, y: 0x0 }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0b00000110);
+        assert_eq!(chip8.v[0xF], 0x1);
+    }
 
     #[test]
     pub fn op_draw() {
