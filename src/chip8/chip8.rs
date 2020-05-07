@@ -131,6 +131,12 @@ impl Chip8 {
         }
     }
 
+    pub fn cycle_n(&mut self, times: u32) {
+        for _ in 0..times {
+            self.cycle();
+        }
+    }
+
     fn read_opcode(&self) -> Opcode {
         let pc = self.pc as usize;
         let opcode_bytes = [self.memory[pc], self.memory[pc+1]];
@@ -150,8 +156,11 @@ impl Chip8 {
             Opcode::AddConstant { x, value } => self.v[x as usize] += value,
 
             Opcode::Store { x, y } => self.v[x as usize] = self.v[y as usize],
-
             Opcode::StoreAddress(address) => self.i = address,
+
+            Opcode::Or { x, y } => self.v[x as usize] = self.v[x as usize] | self.v[y as usize],
+            Opcode::And { x, y } => self.v[x as usize] = self.v[x as usize] & self.v[y as usize],
+            Opcode::Xor { x, y } => self.v[x as usize] = self.v[x as usize] ^ self.v[y as usize],
 
             Opcode::Draw { x, y, n } => self.draw(x, y, n),
 
@@ -314,6 +323,45 @@ mod tests {
         chip8.cycle();
 
         assert_eq!(chip8.v[2], 0x15);
+    }
+
+    #[test]
+    pub fn op_or() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0b11110000 },
+            Opcode::StoreConstant { x: 0x1, value: 0b00001111 },
+            Opcode::Or { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0b11111111);
+    }
+
+    #[test]
+    pub fn op_and() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0b11110000 },
+            Opcode::StoreConstant { x: 0x1, value: 0b00001111 },
+            Opcode::And { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0b00000000);
+    }
+
+    #[test]
+    pub fn op_xor() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0x0, value: 0b11111000 },
+            Opcode::StoreConstant { x: 0x1, value: 0b00011111 },
+            Opcode::Xor { x: 0x0, y: 0x1 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0b11100111);
     }
 
     #[test]
