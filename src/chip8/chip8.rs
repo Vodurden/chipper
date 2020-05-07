@@ -223,9 +223,7 @@ mod tests {
         rom.extend(vec![0b11110000]);
 
         let mut chip8 = Chip8::new_with_rom(rom);
-        chip8.cycle();
-        chip8.cycle();
-        chip8.cycle();
+        chip8.cycle_n(3);
 
         assert_eq!(chip8.gfx[0][0..8], [0,0,0,0,0,0,0,0]);
     }
@@ -272,9 +270,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle();
-        chip8.cycle();
-        chip8.cycle();
+        chip8.cycle_n(3);
         assert_eq!(chip8.pc, 0x208);
     }
 
@@ -287,9 +283,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle();
-        chip8.cycle();
-        chip8.cycle();
+        chip8.cycle_n(3);
         assert_eq!(chip8.pc, 0x208);
     }
 
@@ -313,14 +307,12 @@ mod tests {
 
     #[test]
     pub fn op_store() {
-        let rom = Opcode::to_rom(vec![
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::StoreConstant { x: 1, value: 0x15 },
             Opcode::Store { x: 2, y: 1 }
-        ]);
-        let mut chip8 = Chip8::new_with_rom(rom);
+        ]));
 
-        chip8.cycle();
-        chip8.cycle();
+        chip8.cycle_n(2);
 
         assert_eq!(chip8.v[2], 0x15);
     }
@@ -366,14 +358,12 @@ mod tests {
 
     #[test]
     pub fn op_draw() {
-        let rom = Opcode::to_rom(vec![
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::SetIndexToFontData { x: 0x0A },
             Opcode::Draw { x: 0, y: 0, n: 0x5 }
-        ]);
-        let mut chip8 = Chip8::new_with_rom(rom);
+        ]));
 
-        chip8.cycle();
-        chip8.cycle();
+        chip8.cycle_n(2);
 
         assert_eq!(chip8.gfx[0][0..8], [1,1,1,1,0,0,0,0]);
         assert_eq!(chip8.gfx[1][0..8], [1,0,0,1,0,0,0,0]);
@@ -384,14 +374,12 @@ mod tests {
 
     #[test]
     pub fn op_draw_at_offset() {
-        let rom = Opcode::to_rom(vec![
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::SetIndexToFontData { x: 0x0A },
             Opcode::Draw { x: 10, y: 5, n: 0x5 }
-        ]);
-        let mut chip8 = Chip8::new_with_rom(rom);
+        ]));
 
-        chip8.cycle();
-        chip8.cycle();
+        chip8.cycle_n(2);
 
         assert_eq!(chip8.gfx[5][10..18], [1,1,1,1,0,0,0,0]);
         assert_eq!(chip8.gfx[6][10..18], [1,0,0,1,0,0,0,0]);
@@ -411,15 +399,9 @@ mod tests {
         rom.extend(vec![0b11110000, 0b01101111]);
 
         let mut chip8 = Chip8::new_with_rom(rom);
-
-        chip8.cycle();
-        chip8.cycle();
-
+        chip8.cycle_n(2);
         assert_eq!(chip8.gfx[0][0..8], [1, 1, 1, 1, 0, 0, 0, 0]);
-
-        chip8.cycle();
-        chip8.cycle();
-
+        chip8.cycle_n(2);
         assert_eq!(chip8.gfx[0][0..8], [1, 0, 0, 1, 1, 1, 1, 1]);
     }
 
@@ -438,14 +420,9 @@ mod tests {
 
         let mut chip8 = Chip8::new_with_rom(rom);
 
-        chip8.cycle();
-        chip8.cycle();
-
+        chip8.cycle_n(2);
         assert_eq!(chip8.v[0xF], 0);
-
-        chip8.cycle();
-        chip8.cycle();
-
+        chip8.cycle_n(2);
         assert_eq!(chip8.v[0xF], 1);
     }
 }
