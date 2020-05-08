@@ -53,8 +53,17 @@ pub struct Chip8 {
     /// - Sounds the Chip-8 buzzer.
     pub sound_timer: u8,
 
+    /// Execution state, used to wait for keypresses
+    state: Chip8State,
+
     /// Random Number Generator used for `Opcode::Random`
     rng: ChaCha8Rng,
+}
+
+#[derive(PartialEq)]
+enum Chip8State {
+    Running,
+    WaitingForKey { key: u8 }
 }
 
 impl Chip8 {
@@ -111,6 +120,7 @@ impl Chip8 {
             delay_timer: 0,
             sound_timer: 0,
 
+            state: Chip8State::Running,
             rng: ChaCha8Rng::from_entropy()
         }
     }
@@ -139,10 +149,20 @@ impl Chip8 {
 
     pub fn release_key(&mut self, key: u8) {
         self.keys[key as usize] = false;
+
+        if let Chip8State::WaitingForKey { key: wait_key } = self.state {
+            if key == wait_key {
+                self.state = Chip8State::Running;
+            }
+        }
     }
 
     /// Execute one cycle of the chip8 interpreter.
     pub fn cycle(&mut self) {
+        if self.state != Chip8State::Running {
+            return;
+        }
+
         let opcode = self.read_opcode();
         self.pc += 2;
 
@@ -186,7 +206,7 @@ impl Chip8 {
             // Keypad Opcodes - Opcodes for capturing user input
             Opcode::SkipIfKeyPressed { key } => self.op_skip_next_if(self.keys[key as usize] == true),
             Opcode::SkipIfKeyNotPressed { key } => self.op_skip_next_if(self.keys[key as usize] == false),
-            Opcode::WaitForKeyPress { key: _ } => panic!("Unsupported Opcode"),
+            Opcode::WaitForKeyRelease { key } => self.state = Chip8State::WaitingForKey { key },
 
             // Register Opcodes - Opcodes to manipulate the value of the `V` registers
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
@@ -479,6 +499,22 @@ mod tests {
 
         assert_eq!(chip8.v[0x1], 0x0);
         assert_eq!(chip8.v[0x2], 0xB);
+    }
+
+    #[test]
+    pub fn op_wait_for_key_release() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::WaitForKeyRelease { key: 0xA },
+            Opcode::StoreConstant { x: 0x1, value: 0xA }
+        ]));
+
+        chip8.press_key(0xA);
+        chip8.cycle_n(10);
+        assert_eq!(chip8.v[0x1], 0x0);
+
+        chip8.release_key(0xA);
+        chip8.cycle_n(1);
+        assert_eq!(chip8.v[0x1], 0xA);
     }
 
     #[test]

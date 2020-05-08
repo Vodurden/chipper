@@ -156,8 +156,10 @@ pub enum Opcode {
 
     /// Opcode: `Fx0A`
     ///
-    /// Wait for a keypress and store the result in `Vx`.
-    WaitForKeyPress { key: Register },
+    /// Halt the program until the specified key is released. Store the key that was released in `Vx`.
+    ///
+    /// See: [here](https://retrocomputing.stackexchange.com/a/361) for more information.
+    WaitForKeyRelease { key: Register },
 
     /// Opcode: `Fx07`
     ///
@@ -260,7 +262,7 @@ impl Opcode {
 
             (0xE, x, 0x9, 0xE) => Opcode::SkipIfKeyPressed { key: x },
             (0xE, x, 0xA, 0x1) => Opcode::SkipIfKeyNotPressed { key: x },
-            (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyPress { key: x },
+            (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyRelease { key: x },
 
             (0xF, x, 0x0, 0x7) => Opcode::ReadDelay { x },
             (0xF, x, 0x1, 0x5) => Opcode::SetDelay { x },
@@ -309,7 +311,7 @@ impl Opcode {
 
             Opcode::SkipIfKeyPressed { key } => 0xE09E | ((*key as u16) << 8),
             Opcode::SkipIfKeyNotPressed { key } => 0xE0A1 | ((*key as u16) << 8),
-            Opcode::WaitForKeyPress { key } => 0xF00A | ((*key as u16) << 8),
+            Opcode::WaitForKeyRelease { key } => 0xF00A | ((*key as u16) << 8),
 
             Opcode::ReadDelay { x } => 0xF007 | ((*x as u16) << 8),
             Opcode::SetDelay { x } => 0x0F015 | ((*x as u16) << 8),
@@ -477,8 +479,8 @@ mod tests {
     }
 
     #[test]
-    fn to_u16_wait_for_keypress() {
-        assert_eq!(Opcode::WaitForKeyPress { key: 0xA }.to_u16(), 0xFA0A);
+    fn to_u16_wait_for_key_release() {
+        assert_eq!(Opcode::WaitForKeyRelease { key: 0xA }.to_u16(), 0xFA0A);
     }
 
     #[test]
@@ -650,8 +652,8 @@ mod tests {
     }
 
     #[test]
-    fn from_u16_wait_for_keypress() {
-        assert_eq!(Opcode::from_u16(0xFA0A), Opcode::WaitForKeyPress { key: 0xA });
+    fn from_u16_wait_for_key_release() {
+        assert_eq!(Opcode::from_u16(0xFA0A), Opcode::WaitForKeyRelease { key: 0xA });
     }
 
     #[test]
