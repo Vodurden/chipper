@@ -177,7 +177,7 @@ impl Chip8 {
 
             // Index Opcodes - Opcodes to manipulate the value of `I`
             Opcode::StoreAddress(address) => self.i = address,
-            Opcode::AddIndex { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::AddAddress { x } => self.i += self.v[x as usize] as u16,
             Opcode::StoreBCD { x: _ } => panic!("Unsupported Opcode"),
 
             // Sound Opcodes - Opcodes for manipulating sound
@@ -453,6 +453,30 @@ mod tests {
         chip8.cycle_n(2);
 
         assert_eq!(chip8.v[2], 0x15);
+    }
+
+    #[test]
+    pub fn op_store_address() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreAddress(0xFFF)
+        ]));
+
+        chip8.cycle();
+
+        assert_eq!(chip8.i, 0xFFF);
+    }
+
+    #[test]
+    pub fn op_add_address() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x1),
+            Opcode::StoreConstant { x: 0x0, value: 0x1 },
+            Opcode::AddAddress { x: 0x0 }
+        ]));
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.i, 0x2);
     }
 
     #[test]

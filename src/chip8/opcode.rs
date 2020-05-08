@@ -177,7 +177,7 @@ pub enum Opcode {
     /// Opcode: `Fx1E`
     ///
     /// Add the value of `Vx` to `I`
-    AddIndex { x: Register },
+    AddAddress { x: Register },
 
     /// Opcode: `Fx29`
     ///
@@ -265,7 +265,7 @@ impl Opcode {
             (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyPress { x },
             (0xF, x, 0x1, 0x5) => Opcode::SetDelay { x },
             (0xF, x, 0x1, 0x8) => Opcode::StoreSound { x },
-            (0xF, x, 0x1, 0xE) => Opcode::AddIndex { x },
+            (0xF, x, 0x1, 0xE) => Opcode::AddAddress { x },
             (0xF, x, 0x2, 0x9) => Opcode::SetIndexToFontData { x },
             (0xF, x, 0x3, 0x3) => Opcode::StoreBCD { x },
             (0xF, x, 0x5, 0x5) => Opcode::WriteMemory { x },
@@ -314,7 +314,7 @@ impl Opcode {
             Opcode::WaitForKeyPress { x } => 0xF00A | ((*x as u16) << 8),
             Opcode::SetDelay { x } => 0x0F015 | ((*x as u16) << 8),
             Opcode::StoreSound { x } => 0xF018 | ((*x as u16) << 8),
-            Opcode::AddIndex { x } => 0xF01E | ((*x as u16) << 8),
+            Opcode::AddAddress { x } => 0xF01E | ((*x as u16) << 8),
             Opcode::SetIndexToFontData { x } => 0xF029 | ((*x as u16) << 8),
             Opcode::StoreBCD { x } => 0xF033 | ((*x as u16) << 8),
             Opcode::WriteMemory { x } => 0xF055 | ((*x as u16) << 8),
@@ -497,8 +497,8 @@ mod tests {
     }
 
     #[test]
-    fn to_u16_add_index() {
-        assert_eq!(Opcode::AddIndex { x: 0xA }.to_u16(), 0xFA1E);
+    fn to_u16_add_address() {
+        assert_eq!(Opcode::AddAddress { x: 0xA }.to_u16(), 0xFA1E);
     }
 
     #[test]
@@ -670,8 +670,8 @@ mod tests {
     }
 
     #[test]
-    fn from_u16_add_index() {
-        assert_eq!(Opcode::from_u16(0xFA1E), Opcode::AddIndex { x: 0xA });
+    fn from_u16_add_address() {
+        assert_eq!(Opcode::from_u16(0xFA1E), Opcode::AddAddress { x: 0xA });
     }
 
     #[test]
