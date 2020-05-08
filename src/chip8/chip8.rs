@@ -19,7 +19,19 @@ pub struct Chip8 {
 
     pub gfx: [[u8; 64]; 32],
 
-    pub key: [u8; 16],
+    /// The Chip-8 has a 16 charcter keypad:
+    ///
+    /// ```text
+    /// 1 2 3 C
+    /// 4 5 6 D
+    /// 7 8 9 E
+    /// A 0 B F
+    /// ```
+    ///
+    /// Keys are indexed by their hexadecimal number. For example: `keys[0xA]` gives the state of key `A`.
+    ///
+    /// Each key is either pressed (true) or released (false)
+    pub keys: [bool; 16],
 
     /// General Purpose Registers `V0`, `V1`, ..., `VF`
     ///
@@ -90,7 +102,7 @@ impl Chip8 {
             memory: [0; 4096],
             stack: Vec::new(),
             gfx: [[0; 64]; 32],
-            key: [0; 16],
+            keys: [false; 16],
 
             v: [0; 16],
             i: 0,
@@ -119,6 +131,14 @@ impl Chip8 {
         self.load_rom(rom_bytes);
 
         Ok(())
+    }
+
+    pub fn press_key(&mut self, key: u8) {
+        self.keys[key as usize] = true;
+    }
+
+    pub fn release_key(&mut self, key: u8) {
+        self.keys[key as usize] = false;
     }
 
     /// Execute one cycle of the chip8 interpreter.
@@ -164,9 +184,9 @@ impl Chip8 {
             Opcode::SkipNextIfRegisterNotEqual { x, y } => self.op_skip_next_if(self.v[x as usize] != self.v[y as usize]),
 
             // Keypad Opcodes - Opcodes for capturing user input
-            Opcode::SkipIfKeyPressed { x: _ } => panic!("Unsupported Opcode"),
-            Opcode::SkipIfKeyNotPressed { x: _ } => panic!("Unsupported Opcode"),
-            Opcode::WaitForKeyPress { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::SkipIfKeyPressed { key } => self.op_skip_next_if(self.keys[key as usize] == true),
+            Opcode::SkipIfKeyNotPressed { key } => self.op_skip_next_if(self.keys[key as usize] == false),
+            Opcode::WaitForKeyPress { key: _ } => panic!("Unsupported Opcode"),
 
             // Register Opcodes - Opcodes to manipulate the value of the `V` registers
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
@@ -429,6 +449,36 @@ mod tests {
         assert_eq!(chip8.pc, 0x200);
         chip8.cycle_n(3);
         assert_eq!(chip8.pc, 0x208);
+    }
+
+
+    #[test]
+    pub fn op_skip_if_key_pressed() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::SkipIfKeyPressed { key: 0xA },
+            Opcode::StoreConstant { x: 0x1, value: 0xA },
+            Opcode::StoreConstant { x: 0x2, value: 0xB }
+        ]));
+
+        chip8.press_key(0xA);
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x1], 0x0);
+        assert_eq!(chip8.v[0x2], 0xB);
+    }
+
+    #[test]
+    pub fn op_skip_if_key_not_pressed() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::SkipIfKeyNotPressed { key: 0xA },
+            Opcode::StoreConstant { x: 0x1, value: 0xA },
+            Opcode::StoreConstant { x: 0x2, value: 0xB }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x1], 0x0);
+        assert_eq!(chip8.v[0x2], 0xB);
     }
 
     #[test]

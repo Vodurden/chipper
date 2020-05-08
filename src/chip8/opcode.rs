@@ -147,22 +147,22 @@ pub enum Opcode {
     /// Opcode: `Ex9E`
     ///
     /// Skip the next instruction if the key corresponding to the value of `Vx` is pressed.
-    SkipIfKeyPressed { x: Register },
+    SkipIfKeyPressed { key: Register },
 
     /// Opcode: `ExA1`
     ///
     /// Skip the next instruction if the key corresponding to the value of `Vx` is not pressed.
-    SkipIfKeyNotPressed { x: Register },
+    SkipIfKeyNotPressed { key: Register },
+
+    /// Opcode: `Fx0A`
+    ///
+    /// Wait for a keypress and store the result in `Vx`.
+    WaitForKeyPress { key: Register },
 
     /// Opcode: `Fx07`
     ///
     /// Read the value of the delay timer into `Vx`.
     ReadDelay { x: Register },
-
-    /// Opcode: `Fx0A`
-    ///
-    /// Wait for a keypress and store the result in `Vx`.
-    WaitForKeyPress { x: Register },
 
     /// Opcode: `Fx15`
     ///
@@ -258,11 +258,11 @@ impl Opcode {
             (0xC, x, _, _) => Opcode::Random { x, mask: (word & 0x00FF) as u8 },
             (0xD, x, y, n) => Opcode::Draw { x, y, n },
 
-            (0xE, x, 0x9, 0xE) => Opcode::SkipIfKeyPressed { x },
-            (0xE, x, 0xA, 0x1) => Opcode::SkipIfKeyNotPressed { x },
+            (0xE, x, 0x9, 0xE) => Opcode::SkipIfKeyPressed { key: x },
+            (0xE, x, 0xA, 0x1) => Opcode::SkipIfKeyNotPressed { key: x },
+            (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyPress { key: x },
 
             (0xF, x, 0x0, 0x7) => Opcode::ReadDelay { x },
-            (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyPress { x },
             (0xF, x, 0x1, 0x5) => Opcode::SetDelay { x },
             (0xF, x, 0x1, 0x8) => Opcode::StoreSound { x },
             (0xF, x, 0x1, 0xE) => Opcode::AddAddress { x },
@@ -307,11 +307,11 @@ impl Opcode {
             Opcode::Random { x, mask } => 0xC000 | ((*x as u16) << 8) | (*mask as u16),
             Opcode::Draw { x, y, n } => 0xD000 | ((*x as u16) << 8) | ((*y as u16) << 4) | (*n as u16),
 
-            Opcode::SkipIfKeyPressed { x } => 0xE09E | ((*x as u16) << 8),
-            Opcode::SkipIfKeyNotPressed { x } => 0xE0A1 | ((*x as u16) << 8),
+            Opcode::SkipIfKeyPressed { key } => 0xE09E | ((*key as u16) << 8),
+            Opcode::SkipIfKeyNotPressed { key } => 0xE0A1 | ((*key as u16) << 8),
+            Opcode::WaitForKeyPress { key } => 0xF00A | ((*key as u16) << 8),
 
             Opcode::ReadDelay { x } => 0xF007 | ((*x as u16) << 8),
-            Opcode::WaitForKeyPress { x } => 0xF00A | ((*x as u16) << 8),
             Opcode::SetDelay { x } => 0x0F015 | ((*x as u16) << 8),
             Opcode::StoreSound { x } => 0xF018 | ((*x as u16) << 8),
             Opcode::AddAddress { x } => 0xF01E | ((*x as u16) << 8),
@@ -468,22 +468,22 @@ mod tests {
 
     #[test]
     fn to_u16_skip_if_key_pressed() {
-        assert_eq!(Opcode::SkipIfKeyPressed { x: 0xA }.to_u16(), 0xEA9E);
+        assert_eq!(Opcode::SkipIfKeyPressed { key: 0xA }.to_u16(), 0xEA9E);
     }
 
     #[test]
     fn to_u16_skip_if_key_not_pressed() {
-        assert_eq!(Opcode::SkipIfKeyNotPressed { x: 0xA }.to_u16(), 0xEAA1);
+        assert_eq!(Opcode::SkipIfKeyNotPressed { key: 0xA }.to_u16(), 0xEAA1);
+    }
+
+    #[test]
+    fn to_u16_wait_for_keypress() {
+        assert_eq!(Opcode::WaitForKeyPress { key: 0xA }.to_u16(), 0xFA0A);
     }
 
     #[test]
     fn to_u16_store_delay() {
         assert_eq!(Opcode::ReadDelay { x: 0xA }.to_u16(), 0xFA07);
-    }
-
-    #[test]
-    fn to_u16_wait_for_keypress() {
-        assert_eq!(Opcode::WaitForKeyPress { x: 0xA }.to_u16(), 0xFA0A);
     }
 
     #[test]
@@ -641,22 +641,22 @@ mod tests {
 
     #[test]
     fn from_u16_skip_if_key_pressed() {
-        assert_eq!(Opcode::from_u16(0xEA9E), Opcode::SkipIfKeyPressed { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xEA9E), Opcode::SkipIfKeyPressed { key: 0xA });
     }
 
     #[test]
     fn from_u16_skip_if_key_not_pressed() {
-        assert_eq!(Opcode::from_u16(0xEAA1), Opcode::SkipIfKeyNotPressed { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xEAA1), Opcode::SkipIfKeyNotPressed { key: 0xA });
+    }
+
+    #[test]
+    fn from_u16_wait_for_keypress() {
+        assert_eq!(Opcode::from_u16(0xFA0A), Opcode::WaitForKeyPress { key: 0xA });
     }
 
     #[test]
     fn from_u16_store_delay() {
         assert_eq!(Opcode::from_u16(0xFA07), Opcode::ReadDelay { x: 0xA });
-    }
-
-    #[test]
-    fn from_u16_wait_for_keypress() {
-        assert_eq!(Opcode::from_u16(0xFA0A), Opcode::WaitForKeyPress { x: 0xA });
     }
 
     #[test]
