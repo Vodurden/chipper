@@ -206,8 +206,8 @@ impl Chip8 {
             Opcode::SetIndexToFontData { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
 
             // Memory Opcodes - Opcodes to read & write memory
-            Opcode::WriteMemory { x: _ } => panic!("Unsupported Opcode"),
-            Opcode::ReadMemory { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::WriteMemory { x } => self.op_write_memory(x),
+            Opcode::ReadMemory { x } => self.op_read_memory(x),
         }
     }
 
@@ -280,6 +280,20 @@ impl Chip8 {
                     *pixel ^= 1;
                 }
             }
+        }
+    }
+
+    fn op_write_memory(&mut self, x: Register) {
+        for register in 0..=(x as usize) {
+            self.memory[self.i as usize] = self.v[register];
+            self.i += 1;
+        }
+    }
+
+    fn op_read_memory(&mut self, x: Register) {
+        for register in 0..=(x as usize) {
+            self.v[register] = self.memory[self.i as usize];
+            self.i += 1;
         }
     }
 }
@@ -743,5 +757,79 @@ mod tests {
         assert_eq!(chip8.v[0xF], 0);
         chip8.cycle_n(2);
         assert_eq!(chip8.v[0xF], 1);
+    }
+
+    #[test]
+    pub fn op_write_memory() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + 100),
+            Opcode::StoreConstant { x: 0x0, value: 0xFF },
+            Opcode::StoreConstant { x: 0x1, value: 0xAA },
+            Opcode::StoreConstant { x: 0x2, value: 0xBB },
+            Opcode::WriteMemory { x: 0x2 }
+        ]));
+
+        chip8.cycle_n(5);
+
+        assert_eq!(chip8.memory[0x200 + 100], 0xFF);
+        assert_eq!(chip8.memory[0x200 + 101], 0xAA);
+        assert_eq!(chip8.memory[0x200 + 102], 0xBB);
+        assert_eq!(chip8.i, 0x200 + 102 + 1);
+    }
+
+    /// When using multiple `Opcode::WriteMemory`'s sequentually we expect it to start writing from
+    /// where the previous write stopped.
+    #[test]
+    pub fn op_write_memory_consecutive() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + 100),
+            Opcode::StoreConstant { x: 0x0, value: 0xFF },
+            Opcode::StoreConstant { x: 0x1, value: 0xAA },
+            Opcode::WriteMemory { x: 0x1 },
+            Opcode::StoreConstant { x: 0x0, value: 0x11 },
+            Opcode::StoreConstant { x: 0x1, value: 0x21 },
+            Opcode::WriteMemory { x: 0x1 }
+        ]));
+
+        chip8.cycle_n(7);
+
+        assert_eq!(chip8.memory[0x200 + 100 .. 0x200 + 100 + 4], [0xFF, 0xAA, 0x11, 0x21]);
+    }
+
+    #[test]
+    pub fn op_read_memory() {
+        let mut rom: Vec<u8> = Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + 4), // Store the address of the first byte below our opcodes
+            Opcode::ReadMemory { x: 0x1 }
+        ]);
+        rom.extend(vec![0xAA, 0xFA]);
+
+        let mut chip8 = Chip8::new_with_rom(rom);
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0xAA);
+        assert_eq!(chip8.v[0x1], 0xFA);
+        assert_eq!(chip8.i, 0x200 + 4 + 2)
+    }
+
+
+    /// When using multiple `Opcode::ReadMemory`'s sequentually we expect it to start reading from
+    /// where the previous read stopped.
+    #[test]
+    pub fn op_read_memory_consecutive() {
+        let mut rom: Vec<u8> = Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + 6), // Store the address of the first byte below our opcodes
+            Opcode::ReadMemory { x: 0x1 },
+            Opcode::ReadMemory { x: 0x1 }
+        ]);
+        rom.extend(vec![0xAA, 0xFA, 0x01, 0x02]);
+
+        let mut chip8 = Chip8::new_with_rom(rom);
+
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.v[0x0], 0x01);
+        assert_eq!(chip8.v[0x1], 0x02);
     }
 }
