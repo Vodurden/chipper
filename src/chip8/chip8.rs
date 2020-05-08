@@ -178,7 +178,7 @@ impl Chip8 {
             // Index Opcodes - Opcodes to manipulate the value of `I`
             Opcode::StoreAddress(address) => self.i = address,
             Opcode::AddAddress { x } => self.i += self.v[x as usize] as u16,
-            Opcode::StoreBCD { x: _ } => panic!("Unsupported Opcode"),
+            Opcode::StoreBCD { x } => self.op_store_bcd(x),
 
             // Sound Opcodes - Opcodes for manipulating sound
             Opcode::StoreSound { x } => self.sound_timer = self.v[x as usize],
@@ -225,6 +225,15 @@ impl Chip8 {
         if expression {
             self.pc += 2
         }
+    }
+
+    fn op_store_bcd(&mut self, x: Register) {
+        let x = x as usize;
+        let i = self.i as usize;
+
+        self.memory[i] = self.v[x] / 100; // Value of the first digit
+        self.memory[i + 1] = (self.v[x] / 10) % 10; // Value of the second digit
+        self.memory[i + 2] = self.v[x] % 10; // Value of the third digit
     }
 
     fn op_rand(&mut self, x: Register, mask: u8) {
@@ -492,6 +501,52 @@ mod tests {
 
         assert_eq!(chip8.i, 0x2);
     }
+
+    #[test]
+    pub fn op_store_bcd_one_digit() {
+        let address = 0x200 + 100;
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreAddress(address),
+            Opcode::StoreConstant { x: 0, value: 3 },
+            Opcode::StoreBCD { x: 0 },
+        ]));
+
+        chip8.cycle_n(3);
+
+        let address = address as usize;
+        assert_eq!(chip8.memory[address..address+3], [0, 0, 3]);
+    }
+
+    #[test]
+    pub fn op_store_bcd_two_digits() {
+        let address = 0x200 + 100;
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreAddress(address),
+            Opcode::StoreConstant { x: 0, value: 47 },
+            Opcode::StoreBCD { x: 0 },
+        ]));
+
+        chip8.cycle_n(3);
+
+        let address = address as usize;
+        assert_eq!(chip8.memory[address..address+3], [0, 4, 7]);
+    }
+
+    #[test]
+    pub fn op_store_bcd_three_digits() {
+        let address = 0x200 + 100;
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreAddress(address),
+            Opcode::StoreConstant { x: 0, value: 255 },
+            Opcode::StoreBCD { x: 0 },
+        ]));
+
+        chip8.cycle_n(3);
+
+        let address = address as usize;
+        assert_eq!(chip8.memory[address..address+3], [2, 5, 5]);
+    }
+
 
     #[test]
     pub fn op_random_can_be_deterministicly_seeded() {
