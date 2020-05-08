@@ -1,5 +1,7 @@
 use std::fs;
 use std::path::Path;
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
 
 use crate::chip8::{Opcode, Register, Address};
 
@@ -38,6 +40,9 @@ pub struct Chip8 {
     /// - Decrements by 1 at a rate of 60hz
     /// - Sounds the Chip-8 buzzer.
     pub sound_timer: u8,
+
+    /// Random Number Generator used for `Opcode::Random`
+    rng: ChaCha8Rng,
 }
 
 impl Chip8 {
@@ -93,7 +98,14 @@ impl Chip8 {
 
             delay_timer: 0,
             sound_timer: 0,
+
+            rng: ChaCha8Rng::from_entropy()
         }
+    }
+
+    pub fn with_seed(&mut self, seed: u64) -> &mut Self {
+        self.rng = ChaCha8Rng::seed_from_u64(seed);
+        self
     }
 
     pub fn load_rom(&mut self, rom_bytes: Vec<u8>) {
@@ -176,7 +188,7 @@ impl Chip8 {
             Opcode::ReadDelay { x } => self.v[x as usize] = self.delay_timer,
 
             // Random Opcode
-            Opcode::Random { x: _, mask: _ } => panic!("Unsupported Opcode"),
+            Opcode::Random { x, mask } => self.op_rand(x, mask),
 
             // Math Opcodes
             Opcode::Or { x, y } => self.v[x as usize] = self.v[x as usize] | self.v[y as usize],
@@ -213,6 +225,12 @@ impl Chip8 {
         if expression {
             self.pc += 2
         }
+    }
+
+    fn op_rand(&mut self, x: Register, mask: u8) {
+        let value: u8 = self.rng.gen();
+
+        self.v[x as usize] = value & mask;
     }
 
     fn op_add(&mut self, x: Register, y: Register) {
@@ -435,6 +453,31 @@ mod tests {
         chip8.cycle_n(2);
 
         assert_eq!(chip8.v[2], 0x15);
+    }
+
+    #[test]
+    pub fn op_random_can_be_deterministicly_seeded() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::Random { x: 0, mask: 0xFF },
+            Opcode::Random { x: 1, mask: 0xFF }
+        ]));
+        chip8.with_seed(0);
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0], 0x6C);
+        assert_eq!(chip8.v[1], 0x67);
+    }
+
+    #[test]
+    pub fn op_random_masks_result() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::Random { x: 0, mask: 0x0F }
+        ]));
+
+        chip8.cycle();
+
+        assert_eq!(chip8.v[0], chip8.v[0] & 0x0F);
     }
 
     #[test]
