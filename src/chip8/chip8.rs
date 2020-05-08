@@ -126,10 +126,6 @@ impl Chip8 {
         let opcode = self.read_opcode();
         self.pc += 2;
 
-        println!("{:?}", opcode);
-
-        self.execute_opcode(opcode);
-
         if self.delay_timer > 0 {
             self.delay_timer -= 1;
         }
@@ -137,6 +133,8 @@ impl Chip8 {
         if self.sound_timer > 0 {
             self.sound_timer -= 1;
         }
+
+        self.execute_opcode(opcode);
     }
 
     pub fn cycle_n(&mut self, times: u32) {
@@ -320,21 +318,6 @@ mod tests {
         assert_eq!(chip8.pc, 0x200);
         chip8.cycle();
         assert_eq!(chip8.pc, 0x202);
-    }
-
-    #[test]
-    pub fn op_clear_screen() {
-        let mut rom: Vec<u8> = Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + (2 * 3)), // Store the address of the first byte below
-            Opcode::Draw { x: 0, y: 0, n: 0x1 },
-            Opcode::ClearScreen
-        ]);
-        rom.extend(vec![0b11110000]);
-
-        let mut chip8 = Chip8::new_with_rom(rom);
-        chip8.cycle_n(3);
-
-        assert_eq!(chip8.gfx[0][0..8], [0,0,0,0,0,0,0,0]);
     }
 
     #[test]
@@ -547,6 +530,44 @@ mod tests {
         assert_eq!(chip8.memory[address..address+3], [2, 5, 5]);
     }
 
+    #[test]
+    pub fn op_store_sound() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0, value: 0x5 },
+            Opcode::StoreSound { x: 0 }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.sound_timer, 0x5);
+    }
+
+    #[test]
+    pub fn op_store_delay() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0, value: 0x5 },
+            Opcode::SetDelay { x: 0 }
+        ]));
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.delay_timer, 0x5);
+    }
+
+    #[test]
+    pub fn op_read_delay() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::StoreConstant { x: 0, value: 0x5 },
+            Opcode::SetDelay { x: 0 },
+            Opcode::ReadDelay { x: 1 },
+        ]));
+
+        chip8.cycle_n(3);
+
+        // Delay decreases by 1 per cycle so we expect our
+        // original delay -1
+        assert_eq!(chip8.v[0x1], 0x4);
+    }
 
     #[test]
     pub fn op_random_can_be_deterministicly_seeded() {
@@ -742,6 +763,21 @@ mod tests {
 
         assert_eq!(chip8.v[0x0], 0b00000110);
         assert_eq!(chip8.v[0xF], 0x1);
+    }
+
+    #[test]
+    pub fn op_clear_screen() {
+        let mut rom: Vec<u8> = Opcode::to_rom(vec![
+            Opcode::StoreAddress(0x200 + (2 * 3)), // Store the address of the first byte below
+            Opcode::Draw { x: 0, y: 0, n: 0x1 },
+            Opcode::ClearScreen
+        ]);
+        rom.extend(vec![0b11110000]);
+
+        let mut chip8 = Chip8::new_with_rom(rom);
+        chip8.cycle_n(3);
+
+        assert_eq!(chip8.gfx[0][0..8], [0,0,0,0,0,0,0,0]);
     }
 
     #[test]
