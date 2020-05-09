@@ -2,7 +2,7 @@ use arrayvec::ArrayVec;
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Image, DrawParam, Rect, FilterMode};
-use ggez::input::keyboard::{KeyCode, KeyMods};
+use ggez::input::keyboard::{self, KeyCode, KeyMods};
 
 use crate::chip8::{Chip8, Chip8Output, Opcode};
 
@@ -68,59 +68,27 @@ impl EventHandler for ChipperUI {
             .expect("Failed to set screen coordinates");
     }
 
-    fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {
-        match keycode {
-            KeyCode::Key1 => self.chip8.press_key(0x1),
-            KeyCode::Key2 => self.chip8.press_key(0x2),
-            KeyCode::Key3 => self.chip8.press_key(0x3),
-            KeyCode::Key4 => self.chip8.press_key(0xC),
+    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+        self.chip8.key(0x1, keyboard::is_key_pressed(ctx, KeyCode::Key1));
+        self.chip8.key(0x2, keyboard::is_key_pressed(ctx, KeyCode::Key2));
+        self.chip8.key(0x3, keyboard::is_key_pressed(ctx, KeyCode::Key3));
+        self.chip8.key(0xC, keyboard::is_key_pressed(ctx, KeyCode::Key4));
 
-            KeyCode::Q => self.chip8.press_key(0x4),
-            KeyCode::W => self.chip8.press_key(0x5),
-            KeyCode::E => self.chip8.press_key(0x6),
-            KeyCode::R => self.chip8.press_key(0xD),
+        self.chip8.key(0x4, keyboard::is_key_pressed(ctx, KeyCode::Q));
+        self.chip8.key(0x5, keyboard::is_key_pressed(ctx, KeyCode::W));
+        self.chip8.key(0x6, keyboard::is_key_pressed(ctx, KeyCode::E));
+        self.chip8.key(0xD, keyboard::is_key_pressed(ctx, KeyCode::R));
 
-            KeyCode::A => self.chip8.press_key(0x7),
-            KeyCode::S => self.chip8.press_key(0x8),
-            KeyCode::D => self.chip8.press_key(0x9),
-            KeyCode::F => self.chip8.press_key(0xE),
+        self.chip8.key(0x7, keyboard::is_key_pressed(ctx, KeyCode::A));
+        self.chip8.key(0x8, keyboard::is_key_pressed(ctx, KeyCode::S));
+        self.chip8.key(0x9, keyboard::is_key_pressed(ctx, KeyCode::D));
+        self.chip8.key(0xE, keyboard::is_key_pressed(ctx, KeyCode::F));
 
-            KeyCode::Z => self.chip8.press_key(0xA),
-            KeyCode::X => self.chip8.press_key(0x0),
-            KeyCode::C => self.chip8.press_key(0xB),
-            KeyCode::V => self.chip8.press_key(0xF),
+        self.chip8.key(0xA, keyboard::is_key_pressed(ctx, KeyCode::Z));
+        self.chip8.key(0x0, keyboard::is_key_pressed(ctx, KeyCode::X));
+        self.chip8.key(0xB, keyboard::is_key_pressed(ctx, KeyCode::C));
+        self.chip8.key(0xF, keyboard::is_key_pressed(ctx, KeyCode::V));
 
-            _ => {}
-        }
-    }
-
-    fn key_up_event(&mut self, _ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods) {
-        match keycode {
-            KeyCode::Key1 => self.chip8.release_key(0x1),
-            KeyCode::Key2 => self.chip8.release_key(0x2),
-            KeyCode::Key3 => self.chip8.release_key(0x3),
-            KeyCode::Key4 => self.chip8.release_key(0xC),
-
-            KeyCode::Q => self.chip8.release_key(0x4),
-            KeyCode::W => self.chip8.release_key(0x5),
-            KeyCode::E => self.chip8.release_key(0x6),
-            KeyCode::R => self.chip8.release_key(0xD),
-
-            KeyCode::A => self.chip8.release_key(0x7),
-            KeyCode::S => self.chip8.release_key(0x8),
-            KeyCode::D => self.chip8.release_key(0x9),
-            KeyCode::F => self.chip8.release_key(0xE),
-
-            KeyCode::Z => self.chip8.release_key(0xA),
-            KeyCode::X => self.chip8.release_key(0x0),
-            KeyCode::C => self.chip8.release_key(0xB),
-            KeyCode::V => self.chip8.release_key(0xF),
-
-            _ => {}
-        }
-    }
-
-    fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
         let chip8Output = self.chip8.cycle();
         match chip8Output {
             Chip8Output::Redraw => self.refresh_frame_buffer(),

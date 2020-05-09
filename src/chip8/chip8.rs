@@ -72,7 +72,7 @@ pub struct Chip8 {
 #[derive(PartialEq)]
 enum Chip8State {
     Running,
-    WaitingForKey { key: u8 }
+    WaitingForKey { target_register: Register }
 }
 
 #[derive(PartialEq)]
@@ -162,20 +162,24 @@ impl Chip8 {
         Ok(())
     }
 
-    pub fn press_key(&mut self, key: u8) {
-        println!("Key Down: {:x?}", key);
-        self.keys[key as usize] = true;
-    }
-
-    pub fn release_key(&mut self, key: u8) {
-        println!("Key Up: {:x?}", key);
-        self.keys[key as usize] = false;
-
-        if let Chip8State::WaitingForKey { key: wait_key } = self.state {
-            if key == wait_key {
+    pub fn key(&mut self, key: u8, pressed: bool) {
+        // Transition out of `WaitingForKey` when the correct key is released.
+        if let Chip8State::WaitingForKey { target_register } = self.state {
+            if pressed == false && self.keys[key as usize] == true {
+                self.v[target_register as usize] = key;
                 self.state = Chip8State::Running;
             }
         }
+
+        self.keys[key as usize] = pressed;
+    }
+
+    pub fn press_key(&mut self, key: u8) {
+        self.key(key, true);
+    }
+
+    pub fn release_key(&mut self, key: u8) {
+        self.key(key, false);
     }
 
     /// Execute one cycle of the chip8 interpreter.
@@ -265,9 +269,9 @@ impl Chip8 {
             Opcode::SkipNextIfRegisterNotEqual { x, y } => self.op_skip_next_if(self.v[x as usize] != self.v[y as usize]),
 
             // Keypad Opcodes - Opcodes for capturing user input
-            Opcode::SkipIfKeyPressed { key } => self.op_skip_next_if(self.keys[key as usize] == true),
-            Opcode::SkipIfKeyNotPressed { key } => self.op_skip_next_if(self.keys[key as usize] == false),
-            Opcode::WaitForKeyRelease { key } => self.state = Chip8State::WaitingForKey { key },
+            Opcode::SkipIfKeyPressed { x } => self.op_skip_if_key_pressed(x),
+            Opcode::SkipIfKeyNotPressed { x } => self.op_skip_if_key_not_pressed(x),
+            Opcode::WaitForKeyRelease { x } => self.state = Chip8State::WaitingForKey { target_register: x },
 
             // Register Opcodes - Opcodes to manipulate the value of the `V` registers
             Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
@@ -324,6 +328,16 @@ impl Chip8 {
         if expression {
             self.pc += 2
         }
+    }
+
+    fn op_skip_if_key_pressed(&mut self, x: Register) {
+        let key = self.v[x as usize];
+        self.op_skip_next_if(self.keys[key as usize] == true)
+    }
+
+    fn op_skip_if_key_not_pressed(&mut self, x: Register) {
+        let key = self.v[x as usize];
+        self.op_skip_next_if(self.keys[key as usize] == false)
     }
 
     fn op_store_bcd(&mut self, x: Register) {
@@ -540,13 +554,14 @@ mod tests {
     #[test]
     pub fn op_skip_if_key_pressed() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::SkipIfKeyPressed { key: 0xA },
+            Opcode::StoreConstant { x: 0x0, value: 0xA },
+            Opcode::SkipIfKeyPressed { x: 0x0 },
             Opcode::StoreConstant { x: 0x1, value: 0xA },
             Opcode::StoreConstant { x: 0x2, value: 0xB }
         ]));
 
         chip8.press_key(0xA);
-        chip8.cycle_n(2);
+        chip8.cycle_n(3);
 
         assert_eq!(chip8.v[0x1], 0x0);
         assert_eq!(chip8.v[0x2], 0xB);
@@ -555,12 +570,13 @@ mod tests {
     #[test]
     pub fn op_skip_if_key_not_pressed() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::SkipIfKeyNotPressed { key: 0xA },
+            Opcode::StoreConstant { x: 0x0, value: 0xA },
+            Opcode::SkipIfKeyNotPressed { x: 0x0 },
             Opcode::StoreConstant { x: 0x1, value: 0xA },
             Opcode::StoreConstant { x: 0x2, value: 0xB }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(3);
 
         assert_eq!(chip8.v[0x1], 0x0);
         assert_eq!(chip8.v[0x2], 0xB);
@@ -569,7 +585,7 @@ mod tests {
     #[test]
     pub fn op_wait_for_key_release() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::WaitForKeyRelease { key: 0xA },
+            Opcode::WaitForKeyRelease { x: 0xA },
             Opcode::StoreConstant { x: 0x1, value: 0xA }
         ]));
 
@@ -577,9 +593,11 @@ mod tests {
         chip8.cycle_n(10);
         assert_eq!(chip8.v[0x1], 0x0);
 
-        chip8.release_key(0xA);
+        chip8.press_key(0x3);
+        chip8.release_key(0x3);
         chip8.cycle_n(1);
         assert_eq!(chip8.v[0x1], 0xA);
+        assert_eq!(chip8.v[0xA], 0x3);
     }
 
     #[test]
