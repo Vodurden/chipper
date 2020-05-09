@@ -2,9 +2,9 @@ use arrayvec::ArrayVec;
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Image, DrawParam, Rect, FilterMode};
-use ggez::input::keyboard::{self, KeyCode, KeyMods};
+use ggez::input::keyboard::{self, KeyCode};
 
-use crate::chip8::{Chip8, Chip8Output, Opcode};
+use crate::chip8::{Chip8, Chip8Output};
 
 pub struct ChipperUI {
     chip8: Chip8,
@@ -89,8 +89,8 @@ impl EventHandler for ChipperUI {
         self.chip8.key(0xB, keyboard::is_key_pressed(ctx, KeyCode::C));
         self.chip8.key(0xF, keyboard::is_key_pressed(ctx, KeyCode::V));
 
-        let chip8Output = self.chip8.cycle();
-        match chip8Output {
+        let chip8_output = self.chip8.cycle();
+        match chip8_output {
             Chip8Output::Redraw => self.refresh_frame_buffer(),
             Chip8Output::None => {}
         }
