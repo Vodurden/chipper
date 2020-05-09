@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::event::{self, EventHandler};
-use ggez::graphics::{self, Image, DrawParam, Rect};
+use ggez::graphics::{self, Image, DrawParam, Rect, FilterMode};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 
 use crate::chip8::Chip8;
@@ -124,6 +124,7 @@ impl EventHandler for ChipperUI {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         graphics::clear(ctx, graphics::BLACK);
+        graphics::set_default_filter(ctx, FilterMode::Nearest);
 
         self.refresh_frame_buffer();
         let image = Image::from_rgba8(ctx, 64, 32, &self.frame_buffer)?;
