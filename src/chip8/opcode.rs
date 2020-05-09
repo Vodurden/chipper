@@ -1,6 +1,6 @@
 use crate::chip8::{Register, Address};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Opcode {
     /// Opcode: `00E0`
     ///

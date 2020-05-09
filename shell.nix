@@ -5,5 +5,27 @@ let
 in
 
 pkgs.mkShell {
-  buildInputs = with pkgs; [ cargo rustfmt rls rustracer unstable.rust-analyzer ];
+  buildInputs = with pkgs; [
+    cargo rustfmt rls rustracer unstable.rust-analyzer
+
+    # Dependencies for ggez:
+    alsaLib # libasound2
+    udev # libudev
+    pkgconfig
+
+    x11
+  ];
+
+  APPEND_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
+    libGL
+    xorg.libX11
+    xlibs.libXcursor
+    xlibs.libXi
+    xlibs.libXrandr
+  ];
+
+  shellHook = ''
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$APPEND_LIBRARY_PATH"
+  '';
+
 }
