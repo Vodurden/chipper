@@ -2,6 +2,7 @@ mod chip8;
 mod opcode;
 
 pub use self::chip8::Chip8;
+pub use self::chip8::Chip8Output;
 pub use self::opcode::Opcode;
 
 pub type Register = u8;

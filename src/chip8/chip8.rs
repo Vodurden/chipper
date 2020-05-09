@@ -75,6 +75,12 @@ enum Chip8State {
     WaitingForKey { key: u8 }
 }
 
+#[derive(PartialEq)]
+pub enum Chip8Output {
+    None,
+    Redraw
+}
+
 impl Chip8 {
     pub const SCREEN_WIDTH: usize = 64;
     pub const SCREEN_HEIGHT: usize = 32;
@@ -157,10 +163,12 @@ impl Chip8 {
     }
 
     pub fn press_key(&mut self, key: u8) {
+        println!("Key Down: {:x?}", key);
         self.keys[key as usize] = true;
     }
 
     pub fn release_key(&mut self, key: u8) {
+        println!("Key Up: {:x?}", key);
         self.keys[key as usize] = false;
 
         if let Chip8State::WaitingForKey { key: wait_key } = self.state {
@@ -171,9 +179,9 @@ impl Chip8 {
     }
 
     /// Execute one cycle of the chip8 interpreter.
-    pub fn cycle(&mut self) {
+    pub fn cycle(&mut self) -> Chip8Output {
         if self.state != Chip8State::Running {
-            return;
+            return Chip8Output::None;
         }
 
         let opcode = self.read_opcode();
@@ -187,7 +195,13 @@ impl Chip8 {
             self.sound_timer -= 1;
         }
 
-        self.execute_opcode(opcode);
+        self.execute_opcode(opcode.clone());
+
+        match opcode {
+            Opcode::ClearScreen => Chip8Output::Redraw,
+            Opcode::Draw { x: _, y: _, n: _ } => Chip8Output::Redraw,
+            _ => Chip8Output::None,
+        }
     }
 
     pub fn cycle_n(&mut self, times: u32) {

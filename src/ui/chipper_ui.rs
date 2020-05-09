@@ -4,7 +4,7 @@ use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Image, DrawParam, Rect, FilterMode};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 
-use crate::chip8::Chip8;
+use crate::chip8::{Chip8, Chip8Output, Opcode};
 
 pub struct ChipperUI {
     chip8: Chip8,
@@ -31,7 +31,7 @@ impl ChipperUI {
         // use when setting your game up.
         let mut chipper_ui = ChipperUI::new(&mut ctx);
 
-        chipper_ui.chip8.load_rom_from_file("./roms/PONG").expect("Failed to load ROM");
+        chipper_ui.chip8.load_rom_from_file("./roms/BRIX").expect("Failed to load ROM");
 
         // Run!
         match event::run(&mut ctx, &mut event_loop, &mut chipper_ui) {
@@ -42,10 +42,14 @@ impl ChipperUI {
 
 
     pub fn new(_ctx: &mut Context) -> ChipperUI {
-        ChipperUI {
+        let mut chipper_ui = ChipperUI {
             chip8: Chip8::new(),
             frame_buffer: ArrayVec::<[_; Chip8::SCREEN_WIDTH * Chip8::SCREEN_HEIGHT * 4]>::new(),
-        }
+        };
+
+        chipper_ui.refresh_frame_buffer();
+
+        chipper_ui
     }
 
     fn refresh_frame_buffer(&mut self) {
@@ -117,8 +121,12 @@ impl EventHandler for ChipperUI {
     }
 
     fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
-        // Update code here...
-        self.chip8.cycle();
+        let chip8Output = self.chip8.cycle();
+        match chip8Output {
+            Chip8Output::Redraw => self.refresh_frame_buffer(),
+            Chip8Output::None => {}
+        }
+
         Ok(())
     }
 
@@ -126,7 +134,6 @@ impl EventHandler for ChipperUI {
         graphics::clear(ctx, graphics::BLACK);
         graphics::set_default_filter(ctx, FilterMode::Nearest);
 
-        self.refresh_frame_buffer();
         let image = Image::from_rgba8(ctx, 64, 32, &self.frame_buffer)?;
         graphics::draw(ctx, &image, DrawParam::default())?;
 
