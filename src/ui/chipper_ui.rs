@@ -85,6 +85,8 @@ impl EventHandler for ChipperUI {
             Chip8Output::None => {}
         }
 
+        self.assembly_window.update(&self.assets, &self.chip8);
+
         Ok(())
     }
 
@@ -92,7 +94,7 @@ impl EventHandler for ChipperUI {
         graphics::clear(ctx, graphics::BLACK);
 
         self.chip8_display.draw(ctx)?;
-        self.assembly_window.draw(ctx, &self.assets, &self.chip8);
+        self.assembly_window.draw(ctx)?;
 
         // Draw code here...
         graphics::present(ctx)

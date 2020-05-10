@@ -87,8 +87,8 @@ impl Chip8 {
     pub const SCREEN_HEIGHT: usize = 32;
     pub const SCREEN_PIXELS: usize = Chip8::SCREEN_WIDTH * Chip8::SCREEN_HEIGHT;
 
-    const PROGRAM_START: u16 = 0x200;
-    const MEMORY: u16 = 4096;
+    pub const PROGRAM_START: u16 = 0x200;
+    pub const MEMORY: u16 = 4096;
 
     const FONT_START: u16 = 0x50;
     const FONT_END: u16 = 0xA0;
