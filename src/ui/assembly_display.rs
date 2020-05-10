@@ -11,7 +11,9 @@ pub struct AssemblyDisplay {
     x: f32,
 
     /// The vertical position of this display relative to the main window
-    y: f32
+    y: f32,
+
+    // window_start_address: u16,
 }
 
 impl AssemblyDisplay {

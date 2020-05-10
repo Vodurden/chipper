@@ -4,7 +4,7 @@ use std::path::Path;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-use crate::chip8::{Opcode, Register, Address};
+use crate::chip8::{Opcode, Register, Address, Chip8Result};
 
 /// `Chip8` is the core emulation structure of this project. It implements the memory and opcodes
 /// of the Chip-8 architecture.
@@ -194,13 +194,9 @@ impl Chip8 {
         for opcode_addr in (start_addr..end_addr).step_by(2) {
             let bytes = [self.memory[opcode_addr], self.memory[opcode_addr + 1]];
 
-            if bytes[0] == 0 && bytes[1] == 0 {
-                continue;
+            if let Ok(opcode) = Opcode::from_bytes(&bytes) {
+                result.push((opcode_addr as u16, opcode));
             }
-
-            let opcode = Opcode::from_bytes(&bytes);
-
-            result.push((opcode_addr as u16, opcode));
         }
 
         result
@@ -222,7 +218,8 @@ impl Chip8 {
             return Chip8Output::None;
         }
 
-        let opcode = self.read_opcode();
+        // TODO: Better error handling
+        let opcode = self.read_opcode().expect("Failed to read opcode");
         self.pc += 2;
 
         if self.delay_timer > 0 {
@@ -281,7 +278,7 @@ impl Chip8 {
         gfx_string
     }
 
-    fn read_opcode(&self) -> Opcode {
+    fn read_opcode(&self) -> Chip8Result<Opcode> {
         let pc = self.pc as usize;
         let opcode_bytes = [self.memory[pc], self.memory[pc+1]];
         Opcode::from_bytes(&opcode_bytes)

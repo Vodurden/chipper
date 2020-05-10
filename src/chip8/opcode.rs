@@ -1,4 +1,4 @@
-use crate::chip8::{Register, Address};
+use crate::chip8::{Chip8Error, Chip8Result, Register, Address};
 
 /// `Opcode` represents a single instruction available on the Chip-8
 ///
@@ -311,7 +311,7 @@ pub enum Opcode {
 }
 
 impl Opcode {
-    pub fn from_bytes(bytes: &[u8; 2]) -> Opcode {
+    pub fn from_bytes(bytes: &[u8; 2]) -> Chip8Result<Opcode> {
         let opcode = u16::from_be_bytes(*bytes);
         Opcode::from_u16(opcode)
     }
@@ -329,7 +329,7 @@ impl Opcode {
             .collect()
     }
 
-    pub fn from_u16(word: u16) -> Opcode {
+    pub fn from_u16(word: u16) -> Chip8Result<Opcode> {
         let nibbles = (
             ((word & 0xF000) >> 12) as u8,
             ((word & 0x0F00) >> 8) as u8,
@@ -339,53 +339,52 @@ impl Opcode {
 
         match nibbles {
             // Flow Control
-            (0x2, _, _, _) => Opcode::CallSubroutine(word & 0x0FFF),
-            (0x0, 0x0, 0xE, 0xE) => Opcode::Return,
-            (0x1, _, _, _) => Opcode::Jump(word & 0x0FFF),
-            (0xB, _, _, _) => Opcode::JumpWithOffset(word & 0x0FFF),
+            (0x2, _, _, _) => Ok(Opcode::CallSubroutine(word & 0x0FFF)),
+            (0x0, 0x0, 0xE, 0xE) => Ok(Opcode::Return),
+            (0x1, _, _, _) => Ok(Opcode::Jump(word & 0x0FFF)),
+            (0xB, _, _, _) => Ok(Opcode::JumpWithOffset(word & 0x0FFF)),
 
             // Conditional Execution
-            (0x3, x, _, _) => Opcode::SkipNextIfEqual { x, value: (word & 0x00FF) as u8 },
-            (0x4, x, _, _) => Opcode::SkipNextIfNotEqual { x, value: (word & 0x00FF) as u8 },
-            (0x5, x, y, 0x0) => Opcode::SkipNextIfRegisterEqual { x, y },
-            (0x9, x, y, 0x0) => Opcode::SkipNextIfRegisterNotEqual { x, y },
+            (0x3, x, _, _) => Ok(Opcode::SkipNextIfEqual { x, value: (word & 0x00FF) as u8 }),
+            (0x4, x, _, _) => Ok(Opcode::SkipNextIfNotEqual { x, value: (word & 0x00FF) as u8 }),
+            (0x5, x, y, 0x0) => Ok(Opcode::SkipNextIfRegisterEqual { x, y }),
+            (0x9, x, y, 0x0) => Ok(Opcode::SkipNextIfRegisterNotEqual { x, y }),
 
             // Manipulate Vx
-            (0x6, x, _, _) => Opcode::LoadConstant { x, value: (word & 0x00FF) as u8 },
-            (0x8, x, y, 0x0) => Opcode::Load { x, y },
-            (0x8, x, y, 0x1) => Opcode::Or { x, y },
-            (0x8, x, y, 0x2) => Opcode::And { x, y },
-            (0x8, x, y, 0x3) => Opcode::Xor { x, y },
-            (0x8, x, y, 0x4) => Opcode::Add { x, y },
-            (0x7, x, _, _)   => Opcode::AddConstant { x, value: (word & 0x00FF) as u8 },
-            (0x8, x, y, 0x7) => Opcode::SubtractYFromX { x, y },
-            (0x8, x, y, 0x5) => Opcode::SubtractXFromY { x, y },
-            (0x8, x, y, 0x6) => Opcode::ShiftRight { x, y },
-            (0x8, x, y, 0xE) => Opcode::ShiftLeft { x, y },
+            (0x6, x, _, _) => Ok(Opcode::LoadConstant { x, value: (word & 0x00FF) as u8 }),
+            (0x8, x, y, 0x0) => Ok(Opcode::Load { x, y }),
+            (0x8, x, y, 0x1) => Ok(Opcode::Or { x, y }),
+            (0x8, x, y, 0x2) => Ok(Opcode::And { x, y }),
+            (0x8, x, y, 0x3) => Ok(Opcode::Xor { x, y }),
+            (0x8, x, y, 0x4) => Ok(Opcode::Add { x, y }),
+            (0x7, x, _, _)   => Ok(Opcode::AddConstant { x, value: (word & 0x00FF) as u8 }),
+            (0x8, x, y, 0x7) => Ok(Opcode::SubtractYFromX { x, y }),
+            (0x8, x, y, 0x5) => Ok(Opcode::SubtractXFromY { x, y }),
+            (0x8, x, y, 0x6) => Ok(Opcode::ShiftRight { x, y }),
+            (0x8, x, y, 0xE) => Ok(Opcode::ShiftLeft { x, y }),
 
             // Manipulate I
-            (0xA, _, _, _) => Opcode::IndexAddress(word & 0x0FFF),
-            (0xF, x, 0x1, 0xE) => Opcode::AddAddress { x },
-            (0xF, x, 0x2, 0x9) => Opcode::IndexFont { x },
+            (0xA, _, _, _) => Ok(Opcode::IndexAddress(word & 0x0FFF)),
+            (0xF, x, 0x1, 0xE) => Ok(Opcode::AddAddress { x }),
+            (0xF, x, 0x2, 0x9) => Ok(Opcode::IndexFont { x }),
 
             // Manipulate Memory
-            (0xF, x, 0x3, 0x3) => Opcode::WriteBCD { x },
-            (0xF, x, 0x5, 0x5) => Opcode::WriteMemory { x },
-            (0xF, x, 0x6, 0x5) => Opcode::ReadMemory { x },
+            (0xF, x, 0x3, 0x3) => Ok(Opcode::WriteBCD { x }),
+            (0xF, x, 0x5, 0x5) => Ok(Opcode::WriteMemory { x }),
+            (0xF, x, 0x6, 0x5) => Ok(Opcode::ReadMemory { x }),
 
             // IO
-            (0xE, x, 0x9, 0xE) => Opcode::SkipIfKeyPressed { x },
-            (0xE, x, 0xA, 0x1) => Opcode::SkipIfKeyNotPressed { x },
-            (0xF, x, 0x0, 0xA) => Opcode::WaitForKeyRelease { x },
-            (0xF, x, 0x0, 0x7) => Opcode::LoadDelayIntoRegister { x },
-            (0xF, x, 0x1, 0x5) => Opcode::LoadRegisterIntoDelay { x },
-            (0xF, x, 0x1, 0x8) => Opcode::LoadRegisterIntoSound { x },
-            (0xC, x, _, _) => Opcode::Random { x, mask: (word & 0x00FF) as u8 },
-            (0x0, 0x0, 0xE, 0x0) => Opcode::ClearScreen,
-            (0xD, x, y, n) => Opcode::Draw { x, y, n },
+            (0xE, x, 0x9, 0xE) => Ok(Opcode::SkipIfKeyPressed { x }),
+            (0xE, x, 0xA, 0x1) => Ok(Opcode::SkipIfKeyNotPressed { x }),
+            (0xF, x, 0x0, 0xA) => Ok(Opcode::WaitForKeyRelease { x }),
+            (0xF, x, 0x0, 0x7) => Ok(Opcode::LoadDelayIntoRegister { x }),
+            (0xF, x, 0x1, 0x5) => Ok(Opcode::LoadRegisterIntoDelay { x }),
+            (0xF, x, 0x1, 0x8) => Ok(Opcode::LoadRegisterIntoSound { x }),
+            (0xC, x, _, _) => Ok(Opcode::Random { x, mask: (word & 0x00FF) as u8 }),
+            (0x0, 0x0, 0xE, 0x0) => Ok(Opcode::ClearScreen),
+            (0xD, x, y, n) => Ok(Opcode::Draw { x, y, n }),
 
-            // TODO: Better error handling
-            _ => panic!("Unsupported opcode: {:x?}", word),
+            _ => Err(Chip8Error::UnsupportedOpcode(word)),
         }
     }
 
@@ -698,171 +697,171 @@ mod tests {
     // ======================
     #[test]
     fn from_u16_clear_screen() {
-        assert_eq!(Opcode::from_u16(0x00E0), Opcode::ClearScreen);
+        assert_eq!(Opcode::from_u16(0x00E0), Ok(Opcode::ClearScreen));
     }
 
     #[test]
     fn from_u16_return() {
-        assert_eq!(Opcode::from_u16(0x00EE), Opcode::Return);
+        assert_eq!(Opcode::from_u16(0x00EE), Ok(Opcode::Return));
     }
 
     #[test]
     fn from_u16_jump() {
-        assert_eq!(Opcode::from_u16(0x1ABC), Opcode::Jump(0xABC));
+        assert_eq!(Opcode::from_u16(0x1ABC), Ok(Opcode::Jump(0xABC)));
     }
 
     #[test]
     fn from_u16_call_subroutine() {
-        assert_eq!(Opcode::from_u16(0x2ABC), Opcode::CallSubroutine(0xABC));
+        assert_eq!(Opcode::from_u16(0x2ABC), Ok(Opcode::CallSubroutine(0xABC)));
     }
 
     #[test]
     fn from_u16_skip_next_if_equal() {
-        assert_eq!(Opcode::from_u16(0x3A15), Opcode::SkipNextIfEqual { x: 0xA, value: 0x15 });
+        assert_eq!(Opcode::from_u16(0x3A15), Ok(Opcode::SkipNextIfEqual { x: 0xA, value: 0x15 }));
     }
 
     #[test]
     fn from_u16_skip_next_if_not_equal() {
-        assert_eq!(Opcode::from_u16(0x4A15), Opcode::SkipNextIfNotEqual { x: 0xA, value: 0x15 });
+        assert_eq!(Opcode::from_u16(0x4A15), Ok(Opcode::SkipNextIfNotEqual { x: 0xA, value: 0x15 }));
     }
 
     #[test]
     fn from_u16_skip_next_if_register_equal() {
-        assert_eq!(Opcode::from_u16(0x5AB0), Opcode::SkipNextIfRegisterEqual { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x5AB0), Ok(Opcode::SkipNextIfRegisterEqual { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_store_constant() {
-        assert_eq!(Opcode::from_u16(0x6A10), Opcode::LoadConstant { x: 0xA, value: 0x10 });
+        assert_eq!(Opcode::from_u16(0x6A10), Ok(Opcode::LoadConstant { x: 0xA, value: 0x10 }));
     }
 
     #[test]
     fn from_u16_add_constant() {
-        assert_eq!(Opcode::from_u16(0x7A10), Opcode::AddConstant { x: 0xA, value: 0x10 });
+        assert_eq!(Opcode::from_u16(0x7A10), Ok(Opcode::AddConstant { x: 0xA, value: 0x10 }));
     }
 
     #[test]
     fn from_u16_store() {
-        assert_eq!(Opcode::from_u16(0x8AB0), Opcode::Load { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB0), Ok(Opcode::Load { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_or() {
-        assert_eq!(Opcode::from_u16(0x8AB1), Opcode::Or { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB1), Ok(Opcode::Or { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_and() {
-        assert_eq!(Opcode::from_u16(0x8AB2), Opcode::And { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB2), Ok(Opcode::And { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_xor() {
-        assert_eq!(Opcode::from_u16(0x8AB3), Opcode::Xor { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB3), Ok(Opcode::Xor { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_add() {
-        assert_eq!(Opcode::from_u16(0x8AB4), Opcode::Add { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB4), Ok(Opcode::Add { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_subtract_x_from_y() {
-        assert_eq!(Opcode::from_u16(0x8AB5), Opcode::SubtractXFromY { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB5), Ok(Opcode::SubtractXFromY { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_shift_right() {
-        assert_eq!(Opcode::from_u16(0x8AB6), Opcode::ShiftRight { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB6), Ok(Opcode::ShiftRight { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_subtract_y_from_x() {
-        assert_eq!(Opcode::from_u16(0x8AB7), Opcode::SubtractYFromX { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8AB7), Ok(Opcode::SubtractYFromX { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_shift_left() {
-        assert_eq!(Opcode::from_u16(0x8ABE), Opcode::ShiftLeft { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x8ABE), Ok(Opcode::ShiftLeft { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_skip_next_if_register_not_equal() {
-        assert_eq!(Opcode::from_u16(0x9AB0), Opcode::SkipNextIfRegisterNotEqual { x: 0xA, y: 0xB });
+        assert_eq!(Opcode::from_u16(0x9AB0), Ok(Opcode::SkipNextIfRegisterNotEqual { x: 0xA, y: 0xB }));
     }
 
     #[test]
     fn from_u16_store_address() {
-        assert_eq!(Opcode::from_u16(0xAABC), Opcode::IndexAddress(0xABC));
+        assert_eq!(Opcode::from_u16(0xAABC), Ok(Opcode::IndexAddress(0xABC)));
     }
 
     #[test]
     fn from_u16_jump_with_offset() {
-        assert_eq!(Opcode::from_u16(0xBABC), Opcode::JumpWithOffset(0xABC));
+        assert_eq!(Opcode::from_u16(0xBABC), Ok(Opcode::JumpWithOffset(0xABC)));
     }
 
     #[test]
     fn from_u16_random() {
-        assert_eq!(Opcode::from_u16(0xC152), Opcode::Random { x: 0x1, mask: 0x52 });
+        assert_eq!(Opcode::from_u16(0xC152), Ok(Opcode::Random { x: 0x1, mask: 0x52 }));
     }
 
     #[test]
     fn from_u16_draw() {
-        assert_eq!(Opcode::from_u16(0xDAB1), Opcode::Draw { x: 0xA, y: 0xB, n: 0x1 });
+        assert_eq!(Opcode::from_u16(0xDAB1), Ok(Opcode::Draw { x: 0xA, y: 0xB, n: 0x1 }));
     }
 
     #[test]
     fn from_u16_skip_if_key_pressed() {
-        assert_eq!(Opcode::from_u16(0xEA9E), Opcode::SkipIfKeyPressed { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xEA9E), Ok(Opcode::SkipIfKeyPressed { x: 0xA }));
     }
 
     #[test]
     fn from_u16_skip_if_key_not_pressed() {
-        assert_eq!(Opcode::from_u16(0xEAA1), Opcode::SkipIfKeyNotPressed { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xEAA1), Ok(Opcode::SkipIfKeyNotPressed { x: 0xA }));
     }
 
     #[test]
     fn from_u16_wait_for_key_release() {
-        assert_eq!(Opcode::from_u16(0xFA0A), Opcode::WaitForKeyRelease { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA0A), Ok(Opcode::WaitForKeyRelease { x: 0xA }));
     }
 
     #[test]
     fn from_u16_store_delay() {
-        assert_eq!(Opcode::from_u16(0xFA07), Opcode::LoadDelayIntoRegister { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA07), Ok(Opcode::LoadDelayIntoRegister { x: 0xA }));
     }
 
     #[test]
     fn from_u16_set_delay() {
-        assert_eq!(Opcode::from_u16(0xFA15), Opcode::LoadRegisterIntoDelay { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA15), Ok(Opcode::LoadRegisterIntoDelay { x: 0xA }));
     }
 
     #[test]
     fn from_u16_store_sound() {
-        assert_eq!(Opcode::from_u16(0xFA18), Opcode::LoadRegisterIntoSound { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA18), Ok(Opcode::LoadRegisterIntoSound { x: 0xA }));
     }
 
     #[test]
     fn from_u16_add_address() {
-        assert_eq!(Opcode::from_u16(0xFA1E), Opcode::AddAddress { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA1E), Ok(Opcode::AddAddress { x: 0xA }));
     }
 
     #[test]
     fn from_u16_set_index_to_font_data() {
-        assert_eq!(Opcode::from_u16(0xFA29), Opcode::IndexFont { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA29), Ok(Opcode::IndexFont { x: 0xA }));
     }
 
     #[test]
     fn from_u16_store_bcd() {
-        assert_eq!(Opcode::from_u16(0xFA33), Opcode::WriteBCD { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA33), Ok(Opcode::WriteBCD { x: 0xA }));
     }
 
     #[test]
     fn from_u16_write_memory() {
-        assert_eq!(Opcode::from_u16(0xFA55), Opcode::WriteMemory { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA55), Ok(Opcode::WriteMemory { x: 0xA }));
     }
 
     #[test]
     fn from_u16_read_memory() {
-        assert_eq!(Opcode::from_u16(0xFA65), Opcode::ReadMemory { x: 0xA });
+        assert_eq!(Opcode::from_u16(0xFA65), Ok(Opcode::ReadMemory { x: 0xA }));
     }
 }
