@@ -8,7 +8,7 @@ pub enum Chip8Error {
 
 impl fmt::Display for Chip8Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Chip8Error::UnsupportedOpcode(value) => write!(f, "unsupported opcode: {:x}", value),
         }
     }

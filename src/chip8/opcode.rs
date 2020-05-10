@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::chip8::{Chip8Error, Chip8Result, Register, Address};
 
 /// `Opcode` represents a single instruction available on the Chip-8
@@ -491,7 +493,67 @@ impl Opcode {
     }
 
     pub fn to_assembly_args(&self) -> Option<String> {
-        None
+        let fmt_addr = |addr| Some(format!("{:X}", addr));
+        let fmt_reg_value = |x, value| Some(format!("V{:X}, {}", x, value));
+        let fmt_reg_reg = |x, y| Some(format!("V{:X}, V{:X}", x, y));
+        let fmt_reg = |x| Some(format!("V{:X}", x));
+
+        match self {
+            // Flow Control
+            Opcode::CallSubroutine(addr) => fmt_addr(addr),
+            Opcode::Return => None,
+            Opcode::Jump(addr) => fmt_addr(addr),
+            Opcode::JumpWithOffset(addr) => fmt_addr(addr),
+
+            // Conditional Execution
+            Opcode::SkipNextIfEqual { x, value } => fmt_reg_value(x, value),
+            Opcode::SkipNextIfNotEqual { x, value } => fmt_reg_value(x, value),
+            Opcode::SkipNextIfRegisterEqual { x, y } => fmt_reg_reg(x, y),
+            Opcode::SkipNextIfRegisterNotEqual { x, y } => fmt_reg_reg(x, y),
+
+            // Manipulate Vx
+            Opcode::LoadConstant { x, value } => fmt_reg_value(x, value),
+            Opcode::Load { x, y } => fmt_reg_reg(x, y),
+            Opcode::Or { x, y } => fmt_reg_reg(x, y),
+            Opcode::And { x, y } => fmt_reg_reg(x, y),
+            Opcode::Xor { x, y } => fmt_reg_reg(x, y),
+            Opcode::Add { x, y } => fmt_reg_reg(x, y),
+            Opcode::AddConstant { x, value } => fmt_reg_value(x, value),
+            Opcode::SubtractYFromX { x, y } => fmt_reg_reg(x, y),
+            Opcode::SubtractXFromY { x, y } => fmt_reg_reg(x, y),
+            Opcode::ShiftRight { x, y } => fmt_reg_reg(x, y),
+            Opcode::ShiftLeft { x, y } => fmt_reg_reg(x, y),
+
+            // // Manipulate I
+            Opcode::IndexAddress(addr) => fmt_addr(addr),
+            Opcode::AddAddress { x } => fmt_reg(x),
+            Opcode::IndexFont { x } => fmt_reg(x),
+
+            // // Manipulate Memory
+            Opcode::WriteMemory { x } => fmt_reg(x),
+            Opcode::WriteBCD { x } => fmt_reg(x),
+            Opcode::ReadMemory { x } => fmt_reg(x),
+
+            // // IO
+            Opcode::SkipIfKeyPressed { x } => fmt_reg(x),
+            Opcode::SkipIfKeyNotPressed { x } => fmt_reg(x),
+            Opcode::WaitForKeyRelease { x } => fmt_reg(x),
+            Opcode::LoadDelayIntoRegister { x } => Some(format!("V{:X}, DELAY", x)),
+            Opcode::LoadRegisterIntoDelay { x } => Some(format!("DELAY, V{:X}", x)),
+            Opcode::LoadRegisterIntoSound { x } => Some(format!("SOUND, V{:X}", x)),
+            Opcode::Random { x, mask } => fmt_reg_value(x, mask),
+            Opcode::ClearScreen => None,
+            Opcode::Draw { x, y, n } => Some(format!("V{:X},V{:X},V{:X}", x, y, n)),
+        }
+    }
+}
+
+impl fmt::Display for Opcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let name = self.to_assembly_name();
+        let args = self.to_assembly_args().unwrap_or(String::new());
+
+        write!(f, "{:9} {}", name, args)
     }
 }
 

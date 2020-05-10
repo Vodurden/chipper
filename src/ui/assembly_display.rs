@@ -1,11 +1,11 @@
 use ggez::{Context, GameResult};
-use ggez::graphics::{self, Text};
+use ggez::graphics::{self, Text, DrawParam, FilterMode};
 
 use crate::chip8::Chip8;
-use crate::ui::{Assets, Point2};
+use crate::ui::{Assets, Point2, Vector2};
 
 /// Display the currently executing opcodes of a `Chip8` within a
-/// 160x320 pixel window.
+/// 220x320 pixel window.
 pub struct AssemblyDisplay {
     /// The horizontal position of this display relative to the main window
     x: f32,
@@ -19,7 +19,7 @@ pub struct AssemblyDisplay {
     /// The end address of the memory slice we are currently viewing
     window_end_address: u16,
 
-    lines: Vec<(Point2, Text)>,
+    text: Vec<(Point2, Text)>,
 }
 
 impl AssemblyDisplay {
@@ -28,38 +28,46 @@ impl AssemblyDisplay {
             x,
             y,
             window_start_address: Chip8::PROGRAM_START,
-            window_end_address: Chip8::PROGRAM_START + (20 * 2),
-            lines: Vec::new()
+            window_end_address: Chip8::PROGRAM_START + (25 * 2),
+            text: Vec::new()
         }
     }
 
     pub fn update(&mut self, assets: &Assets, chip8: &Chip8) {
-        // If the window is not viewing the current instruction we should shift the window and re-generate the text.
+        // If the window is not viewing the current instruction we should shift the window
+        // and re-generate the text.
         if chip8.pc < self.window_start_address || chip8.pc > self.window_end_address  {
             self.window_start_address = chip8.pc - 2;
-            self.window_end_address = chip8.pc + (20 * 2);
+            self.window_end_address = chip8.pc + (25 * 2);
 
-            self.lines.clear();
+            self.text.clear();
 
             let opcodes = chip8.opcodes(self.window_start_address, self.window_end_address);
             for (i, (address, opcode)) in opcodes.iter().enumerate() {
-                let opcode_pos = Point2::new(
-                    self.x + 10.0,
-                    self.y + 10.0 + ((i as f32) * 17.0)
-                );
+                let address_pos = Point2::new(self.x + 10.0, self.y + ((i as f32) * 12.0));
+                let address_text = format!("{}", address);
+                let address_text = Text::new((address_text, assets.debug_font, 16.0));
+                self.text.push((address_pos, address_text));
 
-                let opcode_text = format!("{:5X} - {:6}", address, opcode.to_assembly_name());
+                let opcode_pos = address_pos + Vector2::new(36.0, 0.0);
+                let opcode_text = opcode.to_assembly_name();
                 let opcode_text = Text::new((opcode_text, assets.debug_font, 16.0));
+                self.text.push((opcode_pos, opcode_text));
 
-                self.lines.push((opcode_pos, opcode_text));
+                let opcode_arg_pos = opcode_pos + Vector2::new(80.0, 0.0);
+                let opcode_arg_text = opcode.to_assembly_args().unwrap_or(String::new());
+                let opcode_arg_text = Text::new((opcode_arg_text, assets.debug_font, 16.0));
+                self.text.push((opcode_arg_pos, opcode_arg_text));
             }
         }
     }
 
     pub fn draw(&self, ctx: &mut Context) -> GameResult<()> {
-        for (position, text) in &self.lines {
-            graphics::draw(ctx, text, (*position, 0.0, graphics::WHITE))?
+        for (position, text) in &self.text {
+            graphics::queue_text(ctx, text, *position, Some(graphics::WHITE));
         }
+
+        graphics::draw_queued_text(ctx, DrawParam::default(), None, FilterMode::Nearest)?;
 
         Ok(())
     }

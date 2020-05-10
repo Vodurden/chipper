@@ -14,3 +14,5 @@ Here's a list of all the articles I viewed while writing this project, roughly o
 The ROMs included in this repo are sourced from:
 
 - [Chip-8 Games Pack](https://www.zophar.net/pdroms/chip8/chip-8-games-pack.html)
+
+Debug Font: https://kottke.org/plus/type/silkscreen/

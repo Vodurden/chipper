@@ -54,7 +54,7 @@ impl ChipperUI {
 
 impl EventHandler for ChipperUI {
     fn resize_event(&mut self, ctx: &mut Context, _width: f32, _height: f32) {
-        graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, 800.0, 320.0))
+        graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, 860.0, 320.0))
             .expect("Failed to set screen coordinates");
     }
 
