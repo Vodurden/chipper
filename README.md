@@ -9,6 +9,7 @@ Here's a list of all the articles I viewed while writing this project, roughly o
 - [Chip-8 Wiki](https://en.wikipedia.org/wiki/CHIP-8)
 - [Writing a Chip-8 emulator](https://aymanbagabas.com/2018/09/17/chip-8-emulator.html)
 - [Chip8 emulation, 3 take-aways!](https://snoozetime.github.io/2018/11/15/chip8.html)
+- [Chip-1-1.pdf](http://chip8.sourceforge.net/chip8-1.1.pdf)
 
 The ROMs included in this repo are sourced from:
 

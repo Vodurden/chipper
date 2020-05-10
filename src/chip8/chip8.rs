@@ -202,7 +202,6 @@ impl Chip8 {
         self.execute_opcode(opcode.clone());
 
         match opcode {
-            Opcode::ClearScreen => Chip8Output::Redraw,
             Opcode::Draw { x: _, y: _, n: _ } => Chip8Output::Redraw,
             _ => Chip8Output::None,
         }
@@ -256,61 +255,51 @@ impl Chip8 {
 
     fn execute_opcode(&mut self, opcode: Opcode) {
         match opcode {
-            // Flow Control Opcodes - Opcodes for manipulating the program counter
+            // Flow Control
             Opcode::CallSubroutine(address) => self.op_call_subroutine(address),
             Opcode::Return => self.op_return(),
             Opcode::Jump(address) => self.pc = address,
             Opcode::JumpWithOffset(address) => self.pc = address + (self.v[0] as u16),
 
-            // Conditional Opcodes - Opcodes for conditionally executing parts of the program
+            // Conditional Execution
             Opcode::SkipNextIfEqual { x, value } => self.op_skip_next_if(self.v[x as usize] == value),
             Opcode::SkipNextIfNotEqual { x, value } => self.op_skip_next_if(self.v[x as usize] != value),
             Opcode::SkipNextIfRegisterEqual { x, y } => self.op_skip_next_if(self.v[x as usize] == self.v[y as usize]),
             Opcode::SkipNextIfRegisterNotEqual { x, y } => self.op_skip_next_if(self.v[x as usize] != self.v[y as usize]),
 
-            // Keypad Opcodes - Opcodes for capturing user input
-            Opcode::SkipIfKeyPressed { x } => self.op_skip_if_key_pressed(x),
-            Opcode::SkipIfKeyNotPressed { x } => self.op_skip_if_key_not_pressed(x),
-            Opcode::WaitForKeyRelease { x } => self.state = Chip8State::WaitingForKey { target_register: x },
-
-            // Register Opcodes - Opcodes to manipulate the value of the `V` registers
-            Opcode::StoreConstant { x, value } => self.v[x as usize] = value,
-            Opcode::AddConstant { x, value } => self.v[x as usize] = self.v[x as usize].wrapping_add(value),
-            Opcode::Store { x, y } => self.v[x as usize] = self.v[y as usize],
-
-            // Index Opcodes - Opcodes to manipulate the value of `I`
-            Opcode::StoreAddress(address) => self.i = address,
-            Opcode::AddAddress { x } => self.i += self.v[x as usize] as u16,
-            Opcode::StoreBCD { x } => self.op_store_bcd(x),
-
-            // Sound Opcodes - Opcodes for manipulating sound
-            Opcode::StoreSound { x } => self.sound_timer = self.v[x as usize],
-
-            // Time Opcodes
-            Opcode::SetDelay { x } => self.delay_timer = self.v[x as usize],
-            Opcode::ReadDelay { x } => self.v[x as usize] = self.delay_timer,
-
-            // Random Opcode
-            Opcode::Random { x, mask } => self.op_rand(x, mask),
-
-            // Math Opcodes
+            // Manipulate `Vx`
+            Opcode::LoadConstant { x, value } => self.v[x as usize] = value,
+            Opcode::Load { x, y } => self.v[x as usize] = self.v[y as usize],
             Opcode::Or { x, y } => self.v[x as usize] = self.v[x as usize] | self.v[y as usize],
             Opcode::And { x, y } => self.v[x as usize] = self.v[x as usize] & self.v[y as usize],
             Opcode::Xor { x, y } => self.v[x as usize] = self.v[x as usize] ^ self.v[y as usize],
             Opcode::Add { x, y } => self.op_add(x, y),
+            Opcode::AddConstant { x, value } => self.v[x as usize] = self.v[x as usize].wrapping_add(value),
             Opcode::SubtractYFromX { x, y } => self.op_subtract_y_from_x(x, y),
             Opcode::SubtractXFromY { x, y } => self.op_subtract_x_from_y(x, y),
             Opcode::ShiftRight { x, y } => self.op_shift_right(x, y),
             Opcode::ShiftLeft { x, y } => self.op_shift_left(x, y),
 
-            // Drawing Opcodes - Opcodes to draw to the screen
-            Opcode::ClearScreen => self.gfx = [0; Chip8::SCREEN_PIXELS],
-            Opcode::Draw { x, y, n } => self.op_draw(x, y, n),
-            Opcode::SetIndexToFontData { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
+            // Manipulate `I`
+            Opcode::IndexAddress(address) => self.i = address,
+            Opcode::AddAddress { x } => self.i += self.v[x as usize] as u16,
+            Opcode::IndexFont { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
 
-            // Memory Opcodes - Opcodes to read & write memory
+            // Manipulate Memory
             Opcode::WriteMemory { x } => self.op_write_memory(x),
             Opcode::ReadMemory { x } => self.op_read_memory(x),
+            Opcode::WriteBCD { x } => self.op_store_bcd(x),
+
+            // IO Opcodes
+            Opcode::SkipIfKeyPressed { x } => self.op_skip_if_key_pressed(x),
+            Opcode::SkipIfKeyNotPressed { x } => self.op_skip_if_key_not_pressed(x),
+            Opcode::WaitForKeyRelease { x } => self.state = Chip8State::WaitingForKey { target_register: x },
+            Opcode::LoadDelayIntoRegister { x } => self.v[x as usize] = self.delay_timer,
+            Opcode::LoadRegisterIntoDelay { x } => self.delay_timer = self.v[x as usize],
+            Opcode::LoadRegisterIntoSound { x } => self.sound_timer = self.v[x as usize],
+            Opcode::Random { x, mask } => self.op_rand(x, mask),
+            Opcode::ClearScreen => self.gfx = [0; Chip8::SCREEN_PIXELS],
+            Opcode::Draw { x, y, n } => self.op_draw(x, y, n),
         }
     }
 
@@ -431,7 +420,7 @@ mod tests {
     #[test]
     pub fn program_counter_increases_after_cycle() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0xF }
+            Opcode::LoadConstant { x: 0x0, value: 0xF }
         ]));
 
         assert_eq!(chip8.pc, 0x200);
@@ -446,13 +435,13 @@ mod tests {
             Opcode::Jump(0x200 + 6),
 
             // Subroutine
-            Opcode::StoreConstant { x: 0xA, value: 0xAA },
+            Opcode::LoadConstant { x: 0xA, value: 0xAA },
             Opcode::Return,
 
             // Main
-            Opcode::StoreConstant { x: 0x1, value: 0xFF },
+            Opcode::LoadConstant { x: 0x1, value: 0xFF },
             Opcode::CallSubroutine(0x200 + 2),
-            Opcode::StoreConstant { x: 0x2, value: 0xBB }
+            Opcode::LoadConstant { x: 0x2, value: 0xBB }
         ]));
 
         chip8.cycle_n(6);
@@ -466,8 +455,8 @@ mod tests {
     pub fn op_jump() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::Jump(0x200 + 4),
-            Opcode::StoreConstant { x: 0x0, value: 0xAA },
-            Opcode::StoreConstant { x: 0x1, value: 0xFF }
+            Opcode::LoadConstant { x: 0x0, value: 0xAA },
+            Opcode::LoadConstant { x: 0x1, value: 0xFF }
         ]));
 
         chip8.cycle_n(2);
@@ -479,10 +468,10 @@ mod tests {
     #[test]
     pub fn op_jump_with_offset() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0x6 },
+            Opcode::LoadConstant { x: 0x0, value: 0x6 },
             Opcode::JumpWithOffset(0x200),
-            Opcode::StoreConstant { x: 0x1, value: 0xAA },
-            Opcode::StoreConstant { x: 0x2, value: 0xFF }
+            Opcode::LoadConstant { x: 0x1, value: 0xAA },
+            Opcode::LoadConstant { x: 0x2, value: 0xFF }
         ]));
 
         chip8.cycle_n(3);
@@ -527,8 +516,8 @@ mod tests {
     #[test]
     pub fn op_skip_next_if_register_equal() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0xA },
-            Opcode::StoreConstant { x: 0x1, value: 0xA },
+            Opcode::LoadConstant { x: 0x0, value: 0xA },
+            Opcode::LoadConstant { x: 0x1, value: 0xA },
             Opcode::SkipNextIfRegisterEqual { x: 0x0, y: 0x1 }
         ]));
 
@@ -540,8 +529,8 @@ mod tests {
     #[test]
     pub fn op_skip_next_if_register_not_equal() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0xA },
-            Opcode::StoreConstant { x: 0x1, value: 0xB },
+            Opcode::LoadConstant { x: 0x0, value: 0xA },
+            Opcode::LoadConstant { x: 0x1, value: 0xB },
             Opcode::SkipNextIfRegisterNotEqual { x: 0x0, y: 0x1 }
         ]));
 
@@ -554,10 +543,10 @@ mod tests {
     #[test]
     pub fn op_skip_if_key_pressed() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0xA },
+            Opcode::LoadConstant { x: 0x0, value: 0xA },
             Opcode::SkipIfKeyPressed { x: 0x0 },
-            Opcode::StoreConstant { x: 0x1, value: 0xA },
-            Opcode::StoreConstant { x: 0x2, value: 0xB }
+            Opcode::LoadConstant { x: 0x1, value: 0xA },
+            Opcode::LoadConstant { x: 0x2, value: 0xB }
         ]));
 
         chip8.press_key(0xA);
@@ -570,10 +559,10 @@ mod tests {
     #[test]
     pub fn op_skip_if_key_not_pressed() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0xA },
+            Opcode::LoadConstant { x: 0x0, value: 0xA },
             Opcode::SkipIfKeyNotPressed { x: 0x0 },
-            Opcode::StoreConstant { x: 0x1, value: 0xA },
-            Opcode::StoreConstant { x: 0x2, value: 0xB }
+            Opcode::LoadConstant { x: 0x1, value: 0xA },
+            Opcode::LoadConstant { x: 0x2, value: 0xB }
         ]));
 
         chip8.cycle_n(3);
@@ -586,7 +575,7 @@ mod tests {
     pub fn op_wait_for_key_release() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::WaitForKeyRelease { x: 0xA },
-            Opcode::StoreConstant { x: 0x1, value: 0xA }
+            Opcode::LoadConstant { x: 0x1, value: 0xA }
         ]));
 
         chip8.press_key(0xA);
@@ -603,7 +592,7 @@ mod tests {
     #[test]
     pub fn op_store_constant() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0xF }
+            Opcode::LoadConstant { x: 0x0, value: 0xF }
         ]));
         chip8.cycle();
 
@@ -621,8 +610,8 @@ mod tests {
     #[test]
     pub fn op_store() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 1, value: 0x15 },
-            Opcode::Store { x: 2, y: 1 }
+            Opcode::LoadConstant { x: 1, value: 0x15 },
+            Opcode::Load { x: 2, y: 1 }
         ]));
 
         chip8.cycle_n(2);
@@ -633,7 +622,7 @@ mod tests {
     #[test]
     pub fn op_store_address() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreAddress(0xFFF)
+            Opcode::IndexAddress(0xFFF)
         ]));
 
         chip8.cycle();
@@ -644,8 +633,8 @@ mod tests {
     #[test]
     pub fn op_add_address() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x1),
-            Opcode::StoreConstant { x: 0x0, value: 0x1 },
+            Opcode::IndexAddress(0x1),
+            Opcode::LoadConstant { x: 0x0, value: 0x1 },
             Opcode::AddAddress { x: 0x0 }
         ]));
 
@@ -658,9 +647,9 @@ mod tests {
     pub fn op_store_bcd_one_digit() {
         let address = 0x200 + 100;
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreAddress(address),
-            Opcode::StoreConstant { x: 0, value: 3 },
-            Opcode::StoreBCD { x: 0 },
+            Opcode::IndexAddress(address),
+            Opcode::LoadConstant { x: 0, value: 3 },
+            Opcode::WriteBCD { x: 0 },
         ]));
 
         chip8.cycle_n(3);
@@ -673,9 +662,9 @@ mod tests {
     pub fn op_store_bcd_two_digits() {
         let address = 0x200 + 100;
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreAddress(address),
-            Opcode::StoreConstant { x: 0, value: 47 },
-            Opcode::StoreBCD { x: 0 },
+            Opcode::IndexAddress(address),
+            Opcode::LoadConstant { x: 0, value: 47 },
+            Opcode::WriteBCD { x: 0 },
         ]));
 
         chip8.cycle_n(3);
@@ -688,9 +677,9 @@ mod tests {
     pub fn op_store_bcd_three_digits() {
         let address = 0x200 + 100;
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreAddress(address),
-            Opcode::StoreConstant { x: 0, value: 255 },
-            Opcode::StoreBCD { x: 0 },
+            Opcode::IndexAddress(address),
+            Opcode::LoadConstant { x: 0, value: 255 },
+            Opcode::WriteBCD { x: 0 },
         ]));
 
         chip8.cycle_n(3);
@@ -702,8 +691,8 @@ mod tests {
     #[test]
     pub fn op_store_sound() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0, value: 0x5 },
-            Opcode::StoreSound { x: 0 }
+            Opcode::LoadConstant { x: 0, value: 0x5 },
+            Opcode::LoadRegisterIntoSound { x: 0 }
         ]));
 
         chip8.cycle_n(2);
@@ -714,8 +703,8 @@ mod tests {
     #[test]
     pub fn op_store_delay() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0, value: 0x5 },
-            Opcode::SetDelay { x: 0 }
+            Opcode::LoadConstant { x: 0, value: 0x5 },
+            Opcode::LoadRegisterIntoDelay { x: 0 }
         ]));
 
         chip8.cycle_n(2);
@@ -726,9 +715,9 @@ mod tests {
     #[test]
     pub fn op_read_delay() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0, value: 0x5 },
-            Opcode::SetDelay { x: 0 },
-            Opcode::ReadDelay { x: 1 },
+            Opcode::LoadConstant { x: 0, value: 0x5 },
+            Opcode::LoadRegisterIntoDelay { x: 0 },
+            Opcode::LoadDelayIntoRegister { x: 1 },
         ]));
 
         chip8.cycle_n(3);
@@ -766,8 +755,8 @@ mod tests {
     #[test]
     pub fn op_or() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0b11110000 },
-            Opcode::StoreConstant { x: 0x1, value: 0b00001111 },
+            Opcode::LoadConstant { x: 0x0, value: 0b11110000 },
+            Opcode::LoadConstant { x: 0x1, value: 0b00001111 },
             Opcode::Or { x: 0x0, y: 0x1 }
         ]));
 
@@ -779,8 +768,8 @@ mod tests {
     #[test]
     pub fn op_and() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0b11110000 },
-            Opcode::StoreConstant { x: 0x1, value: 0b00001111 },
+            Opcode::LoadConstant { x: 0x0, value: 0b11110000 },
+            Opcode::LoadConstant { x: 0x1, value: 0b00001111 },
             Opcode::And { x: 0x0, y: 0x1 }
         ]));
 
@@ -792,8 +781,8 @@ mod tests {
     #[test]
     pub fn op_xor() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0b11111000 },
-            Opcode::StoreConstant { x: 0x1, value: 0b00011111 },
+            Opcode::LoadConstant { x: 0x0, value: 0b11111000 },
+            Opcode::LoadConstant { x: 0x1, value: 0b00011111 },
             Opcode::Xor { x: 0x0, y: 0x1 }
         ]));
 
@@ -805,8 +794,8 @@ mod tests {
     #[test]
     pub fn op_add() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0x1 },
-            Opcode::StoreConstant { x: 0x1, value: 0x2 },
+            Opcode::LoadConstant { x: 0x0, value: 0x1 },
+            Opcode::LoadConstant { x: 0x1, value: 0x2 },
             Opcode::Add { x: 0x0, y: 0x1 }
         ]));
 
@@ -818,8 +807,8 @@ mod tests {
     #[test]
     pub fn op_add_overflow() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0xFF },
-            Opcode::StoreConstant { x: 0x1, value: 0xFF },
+            Opcode::LoadConstant { x: 0x0, value: 0xFF },
+            Opcode::LoadConstant { x: 0x1, value: 0xFF },
             Opcode::Add { x: 0x0, y: 0x1 }
         ]));
 
@@ -833,8 +822,8 @@ mod tests {
     #[test]
     pub fn op_subtract_y_from_x() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0x5 },
-            Opcode::StoreConstant { x: 0x1, value: 0x1 },
+            Opcode::LoadConstant { x: 0x0, value: 0x5 },
+            Opcode::LoadConstant { x: 0x1, value: 0x1 },
             Opcode::SubtractYFromX { x: 0x0, y: 0x1 }
         ]));
 
@@ -846,8 +835,8 @@ mod tests {
     #[test]
     pub fn op_subtract_y_from_x_overflow() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0x0 },
-            Opcode::StoreConstant { x: 0x1, value: 0x1 },
+            Opcode::LoadConstant { x: 0x0, value: 0x0 },
+            Opcode::LoadConstant { x: 0x1, value: 0x1 },
             Opcode::SubtractYFromX { x: 0x0, y: 0x1 }
         ]));
 
@@ -860,8 +849,8 @@ mod tests {
     #[test]
     pub fn op_subtract_x_from_y() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0x1 },
-            Opcode::StoreConstant { x: 0x1, value: 0x5 },
+            Opcode::LoadConstant { x: 0x0, value: 0x1 },
+            Opcode::LoadConstant { x: 0x1, value: 0x5 },
             Opcode::SubtractXFromY { x: 0x0, y: 0x1 }
         ]));
 
@@ -873,8 +862,8 @@ mod tests {
     #[test]
     pub fn op_subtract_x_from_y_overflow() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0x1 },
-            Opcode::StoreConstant { x: 0x1, value: 0x0 },
+            Opcode::LoadConstant { x: 0x0, value: 0x1 },
+            Opcode::LoadConstant { x: 0x1, value: 0x0 },
             Opcode::SubtractXFromY { x: 0x0, y: 0x1 }
         ]));
 
@@ -887,7 +876,7 @@ mod tests {
     #[test]
     pub fn op_shift_right() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0b00000010 },
+            Opcode::LoadConstant { x: 0x0, value: 0b00000010 },
             Opcode::ShiftRight { x: 0x0, y: 0x0 }
         ]));
 
@@ -899,7 +888,7 @@ mod tests {
     #[test]
     pub fn op_shift_right_capture_msb() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0b00000011 },
+            Opcode::LoadConstant { x: 0x0, value: 0b00000011 },
             Opcode::ShiftRight { x: 0x0, y: 0x0 }
         ]));
 
@@ -912,7 +901,7 @@ mod tests {
     #[test]
     pub fn op_shift_left() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0b00000011 },
+            Opcode::LoadConstant { x: 0x0, value: 0b00000011 },
             Opcode::ShiftLeft { x: 0x0, y: 0x0 }
         ]));
 
@@ -924,7 +913,7 @@ mod tests {
     #[test]
     pub fn op_shift_left_capture_lsb() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreConstant { x: 0x0, value: 0b10000011 },
+            Opcode::LoadConstant { x: 0x0, value: 0b10000011 },
             Opcode::ShiftLeft { x: 0x0, y: 0x0 }
         ]));
 
@@ -937,7 +926,7 @@ mod tests {
     #[test]
     pub fn op_clear_screen() {
         let mut rom: Vec<u8> = Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + (2 * 3)), // Store the address of the first byte below
+            Opcode::IndexAddress(0x200 + (2 * 3)), // Store the address of the first byte below
             Opcode::Draw { x: 0, y: 0, n: 0x1 },
             Opcode::ClearScreen
         ]);
@@ -952,8 +941,8 @@ mod tests {
     #[test]
     pub fn op_draw() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::SetIndexToFontData { x: 0x0A },
-            Opcode::StoreConstant { x: 0x0, value: 0 },
+            Opcode::IndexFont { x: 0x0A },
+            Opcode::LoadConstant { x: 0x0, value: 0 },
             Opcode::Draw { x: 0x0, y: 0x0, n: 0x5 }
         ]));
 
@@ -971,9 +960,9 @@ mod tests {
     #[test]
     pub fn op_draw_at_offset() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::SetIndexToFontData { x: 0x0A },
-            Opcode::StoreConstant { x: 0x0, value: 38 },
-            Opcode::StoreConstant { x: 0x1, value: 20 },
+            Opcode::IndexFont { x: 0x0A },
+            Opcode::LoadConstant { x: 0x0, value: 38 },
+            Opcode::LoadConstant { x: 0x1, value: 20 },
             Opcode::Draw { x: 0x0, y: 0x1, n: 0x5 }
         ]));
 
@@ -991,10 +980,10 @@ mod tests {
     #[test]
     pub fn op_draw_xors_overlapping_pixels() {
         let mut rom: Vec<u8> = Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + (2 * 5)), // Store the address of the first byte below
-            Opcode::StoreConstant { x: 0x0, value: 0 },
+            Opcode::IndexAddress(0x200 + (2 * 5)), // Store the address of the first byte below
+            Opcode::LoadConstant { x: 0x0, value: 0 },
             Opcode::Draw { x: 0x0, y: 0x0, n: 0x1 },
-            Opcode::StoreAddress(0x200 + (2 * 5) + 1), // Store the address of the second byte below
+            Opcode::IndexAddress(0x200 + (2 * 5) + 1), // Store the address of the second byte below
             Opcode::Draw { x: 0x0, y: 0x0, n: 0x1 },
         ]);
         rom.extend(vec![0b11110000, 0b01101111]);
@@ -1012,10 +1001,10 @@ mod tests {
     #[test]
     pub fn op_draw_collision_detection() {
         let mut rom: Vec<u8> = Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + (2 * 5)), // Store the address of the first byte below
-            Opcode::StoreConstant { x: 0x0, value: 0 },
+            Opcode::IndexAddress(0x200 + (2 * 5)), // Store the address of the first byte below
+            Opcode::LoadConstant { x: 0x0, value: 0 },
             Opcode::Draw { x: 0x0, y: 0x0, n: 0x1 },
-            Opcode::StoreAddress(0x200 + (2 * 5) + 1), // Store the address of the second byte below
+            Opcode::IndexAddress(0x200 + (2 * 5) + 1), // Store the address of the second byte below
             Opcode::Draw { x: 0x0, y: 0x0, n: 0x1 },
         ]);
         rom.extend(vec![0b11110000, 0b01101111]);
@@ -1031,10 +1020,10 @@ mod tests {
     #[test]
     pub fn op_write_memory() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + 100),
-            Opcode::StoreConstant { x: 0x0, value: 0xFF },
-            Opcode::StoreConstant { x: 0x1, value: 0xAA },
-            Opcode::StoreConstant { x: 0x2, value: 0xBB },
+            Opcode::IndexAddress(0x200 + 100),
+            Opcode::LoadConstant { x: 0x0, value: 0xFF },
+            Opcode::LoadConstant { x: 0x1, value: 0xAA },
+            Opcode::LoadConstant { x: 0x2, value: 0xBB },
             Opcode::WriteMemory { x: 0x2 }
         ]));
 
@@ -1051,12 +1040,12 @@ mod tests {
     #[test]
     pub fn op_write_memory_consecutive() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + 100),
-            Opcode::StoreConstant { x: 0x0, value: 0xFF },
-            Opcode::StoreConstant { x: 0x1, value: 0xAA },
+            Opcode::IndexAddress(0x200 + 100),
+            Opcode::LoadConstant { x: 0x0, value: 0xFF },
+            Opcode::LoadConstant { x: 0x1, value: 0xAA },
             Opcode::WriteMemory { x: 0x1 },
-            Opcode::StoreConstant { x: 0x0, value: 0x11 },
-            Opcode::StoreConstant { x: 0x1, value: 0x21 },
+            Opcode::LoadConstant { x: 0x0, value: 0x11 },
+            Opcode::LoadConstant { x: 0x1, value: 0x21 },
             Opcode::WriteMemory { x: 0x1 }
         ]));
 
@@ -1068,7 +1057,7 @@ mod tests {
     #[test]
     pub fn op_read_memory() {
         let mut rom: Vec<u8> = Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + 4), // Store the address of the first byte below our opcodes
+            Opcode::IndexAddress(0x200 + 4), // Store the address of the first byte below our opcodes
             Opcode::ReadMemory { x: 0x1 }
         ]);
         rom.extend(vec![0xAA, 0xFA]);
@@ -1088,7 +1077,7 @@ mod tests {
     #[test]
     pub fn op_read_memory_consecutive() {
         let mut rom: Vec<u8> = Opcode::to_rom(vec![
-            Opcode::StoreAddress(0x200 + 6), // Store the address of the first byte below our opcodes
+            Opcode::IndexAddress(0x200 + 6), // Store the address of the first byte below our opcodes
             Opcode::ReadMemory { x: 0x1 },
             Opcode::ReadMemory { x: 0x1 }
         ]);
