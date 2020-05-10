@@ -20,12 +20,17 @@ impl AssemblyDisplay {
     }
 
     pub fn draw(&self, ctx: &mut Context, assets: &Assets, chip8: &Chip8) {
-        let opcode = chip8.current_opcode();
-        let opcode_name = opcode.to_assembly_name();
+        let opcodes = chip8.current_opcode_window(10);
+        for (i, (address, opcode)) in opcodes.iter().enumerate() {
+            let opcode_pos = Point2::new(
+                self.x + 10.0,
+                self.y + 10.0 + ((i as f32) * 17.0)
+            );
 
-        let opcode_pos = Point2::new(self.x + 10.0, self.y + 10.0);
-        let opcode_text = Text::new((opcode_name, assets.debug_font, 16.0));
-        graphics::draw(ctx, &opcode_text, (opcode_pos, 0.0, graphics::WHITE))
-            .expect("Failed to draw text");
+            let opcode_text = format!("{:5X} - {:6}", address, opcode.to_assembly_name());
+            let opcode_text = Text::new((opcode_text, assets.debug_font, 16.0));
+            graphics::draw(ctx, &opcode_text, (opcode_pos, 0.0, graphics::WHITE))
+                .expect("Failed to draw text");
+        }
     }
 }

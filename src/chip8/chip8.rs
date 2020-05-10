@@ -1,3 +1,4 @@
+use std::cmp::{min, max};
 use std::fs;
 use std::path::Path;
 use rand::prelude::*;
@@ -86,6 +87,9 @@ impl Chip8 {
     pub const SCREEN_HEIGHT: usize = 32;
     pub const SCREEN_PIXELS: usize = Chip8::SCREEN_WIDTH * Chip8::SCREEN_HEIGHT;
 
+    const PROGRAM_START: u16 = 0x200;
+    const MEMORY: u16 = 4096;
+
     const FONT_START: u16 = 0x50;
     const FONT_END: u16 = 0xA0;
     const FONTSET: [u8; 80] = [
@@ -109,7 +113,7 @@ impl Chip8 {
 
     pub fn new() -> Chip8 {
         let mut chip8 = Chip8::empty();
-        chip8.pc = 0x200;
+        chip8.pc = Chip8::PROGRAM_START;
 
         let font_start = Chip8::FONT_START as usize;
         let font_end = Chip8::FONT_END as usize;
@@ -127,7 +131,7 @@ impl Chip8 {
     /// Returns a Chip8 with _no initialized memory_
     pub fn empty() -> Chip8 {
         Chip8 {
-            memory: [0; 4096],
+            memory: [0; Chip8::MEMORY as usize],
             stack: Vec::new(),
             gfx: [0; Chip8::SCREEN_PIXELS],
             keys: [false; 16],
@@ -182,8 +186,34 @@ impl Chip8 {
         self.key(key, false);
     }
 
-    pub fn current_opcode(&self) -> Opcode {
-        self.read_opcode()
+    pub fn opcodes(&self, start_addr: u16, end_addr: u16) -> Vec<(u16, Opcode)> {
+        let start_addr = start_addr as usize;
+        let end_addr = end_addr as usize;
+
+        let mut result = Vec::new();
+        for opcode_addr in (start_addr..end_addr).step_by(2) {
+            let bytes = [self.memory[opcode_addr], self.memory[opcode_addr + 1]];
+
+            if bytes[0] == 0 && bytes[1] == 0 {
+                continue;
+            }
+
+            let opcode = Opcode::from_bytes(&bytes);
+
+            result.push((opcode_addr as u16, opcode));
+        }
+
+        result
+    }
+
+    /// Return a "window" of (address, opcodes) centered on the currently executing code.
+    pub fn current_opcode_window(&self, window_size: u16) -> Vec<(u16, Opcode)> {
+        // We use the full window size in both directions because each opcode
+        // takes two bytes
+        let range_start = max(Chip8::PROGRAM_START as u16, self.pc - (window_size * 2));
+        let range_end = min(Chip8::MEMORY - 2, self.pc + (window_size * 2));
+
+        self.opcodes(range_start, range_end)
     }
 
     /// Execute one cycle of the chip8 interpreter.
