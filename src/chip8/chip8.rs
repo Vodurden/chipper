@@ -182,6 +182,10 @@ impl Chip8 {
         self.key(key, false);
     }
 
+    pub fn current_opcode(&self) -> Opcode {
+        self.read_opcode()
+    }
+
     /// Execute one cycle of the chip8 interpreter.
     pub fn cycle(&mut self) -> Chip8Output {
         if self.state != Chip8State::Running {

@@ -1,20 +1,16 @@
-use arrayvec::ArrayVec;
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::event::{self, EventHandler};
-use ggez::graphics::{self, Image, DrawParam, Rect, FilterMode};
+use ggez::graphics::{self, Rect, FilterMode};
 use ggez::input::keyboard::{self, KeyCode};
 
 use crate::chip8::{Chip8, Chip8Output};
+use crate::ui::{Assets, AssemblyDisplay, Chip8Display};
 
 pub struct ChipperUI {
     chip8: Chip8,
-
-    /// `frame_buffer_image` holds the texture derived from the Chip-8 graphics memory.
-    ///
-    /// We need to refresh `frame_buffer` whenever `Chip8` executes `Opcode::Draw` or
-    /// `Opcode::ClearScreen`. Otherwise we can just keep rendering this texture until
-    /// something changes.
-    frame_buffer_image: Image,
+    assets: Assets,
+    chip8_display: Chip8Display,
+    assembly_window: AssemblyDisplay,
 }
 
 impl ChipperUI {
@@ -29,7 +25,7 @@ impl ChipperUI {
         // use when setting your game up.
         let mut chipper_ui = ChipperUI::new(&mut ctx);
 
-        chipper_ui.chip8.load_rom_from_file("./roms/TANK").expect("Failed to load ROM");
+        chipper_ui.chip8.load_rom_from_file("./roms/PONG").expect("Failed to load ROM");
 
         // Run!
         match event::run(&mut ctx, &mut event_loop, &mut chipper_ui) {
@@ -42,29 +38,23 @@ impl ChipperUI {
     pub fn new(ctx: &mut Context) -> ChipperUI {
         graphics::set_default_filter(ctx, FilterMode::Nearest);
 
+        let assets = Assets::load(ctx);
         let chip8 = Chip8::new();
-        let frame_buffer_image = ChipperUI::generate_frame_buffer_image(&chip8, ctx);
+        let chip8_display = Chip8Display::new(ctx, &chip8);
+        let assembly_window = AssemblyDisplay::new(640.0, 0.0);
 
-        ChipperUI { chip8, frame_buffer_image }
-    }
-
-    fn generate_frame_buffer_image(chip8: &Chip8, ctx: &mut Context) -> Image {
-        let frame_buffer: ArrayVec::<[_; Chip8::SCREEN_WIDTH * Chip8::SCREEN_HEIGHT * 4]> =
-            chip8.gfx.iter().flat_map(|pixel| {
-                match pixel {
-                    0 => vec![0x0, 0x0, 0x0, 0x0],
-                    _ => vec![0xFF, 0xFF, 0xFF, 0xFF],
-                }
-            }).collect();
-
-        Image::from_rgba8(ctx, 64, 32, &frame_buffer)
-            .expect("Failed to generate frame buffer")
+        ChipperUI {
+            assets,
+            chip8,
+            chip8_display,
+            assembly_window
+        }
     }
 }
 
 impl EventHandler for ChipperUI {
     fn resize_event(&mut self, ctx: &mut Context, _width: f32, _height: f32) {
-        graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, 64.0, 32.0))
+        graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, 800.0, 320.0))
             .expect("Failed to set screen coordinates");
     }
 
@@ -91,8 +81,7 @@ impl EventHandler for ChipperUI {
 
         let chip8_output = self.chip8.cycle();
         match chip8_output {
-            Chip8Output::Redraw =>
-                self.frame_buffer_image = ChipperUI::generate_frame_buffer_image(&self.chip8, ctx),
+            Chip8Output::Redraw => self.chip8_display.on_chip8_draw(ctx, &self.chip8),
             Chip8Output::None => {}
         }
 
@@ -102,7 +91,8 @@ impl EventHandler for ChipperUI {
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         graphics::clear(ctx, graphics::BLACK);
 
-        graphics::draw(ctx, &self.frame_buffer_image, DrawParam::default())?;
+        self.chip8_display.draw(ctx)?;
+        self.assembly_window.draw(ctx, &self.assets, &self.chip8);
 
         // Draw code here...
         graphics::present(ctx)

@@ -245,7 +245,6 @@ pub enum Opcode {
     /// - Set `I` to `I + x + 1`.
     ReadMemory { x: Register },
 
-
     // ============================================================================================
     // = IO Opcodes - Opcodes for interacting with the real world (drawing, input, sound, etc...) =
     // ============================================================================================
@@ -359,9 +358,9 @@ impl Opcode {
             (0x8, x, y, 0x3) => Opcode::Xor { x, y },
             (0x8, x, y, 0x4) => Opcode::Add { x, y },
             (0x7, x, _, _)   => Opcode::AddConstant { x, value: (word & 0x00FF) as u8 },
+            (0x8, x, y, 0x7) => Opcode::SubtractYFromX { x, y },
             (0x8, x, y, 0x5) => Opcode::SubtractXFromY { x, y },
             (0x8, x, y, 0x6) => Opcode::ShiftRight { x, y },
-            (0x8, x, y, 0x7) => Opcode::SubtractYFromX { x, y },
             (0x8, x, y, 0xE) => Opcode::ShiftLeft { x, y },
 
             // Manipulate I
@@ -413,9 +412,9 @@ impl Opcode {
             Opcode::Xor { x, y } => 0x8003 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::Add { x, y } => 0x8004 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::AddConstant { x, value } => 0x7000 | ((*x as u16) << 8) | (*value as u16),
+            Opcode::SubtractYFromX { x, y } => 0x8007 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::SubtractXFromY { x, y } => 0x8005 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::ShiftRight { x, y } => 0x8006 | ((*x as u16) << 8) | ((*y as u16) << 4),
-            Opcode::SubtractYFromX { x, y } => 0x8007 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::ShiftLeft { x, y } => 0x800E | ((*x as u16) << 8) | ((*y as u16) << 4),
 
             // Manipulate I
@@ -439,6 +438,61 @@ impl Opcode {
             Opcode::ClearScreen => 0x00E0,
             Opcode::Draw { x, y, n } => 0xD000 | ((*x as u16) << 8) | ((*y as u16) << 4) | (*n as u16),
         }
+    }
+
+    /// Return the Assembly name of this opcode
+    pub fn to_assembly_name(&self) -> &str {
+        match self {
+            // Flow Control
+            Opcode::CallSubroutine(_) => "CALL",
+            Opcode::Return => "RET",
+            Opcode::Jump(_) => "JUMP",
+            Opcode::JumpWithOffset(_) => "JUMP",
+
+            // Conditional Execution
+            Opcode::SkipNextIfEqual { x: _, value: _ } => "SKIP.EQ",
+            Opcode::SkipNextIfNotEqual { x: _, value: _ } => "SKIP.NE",
+            Opcode::SkipNextIfRegisterEqual { x: _, y: _ } => "SKIP.EQ",
+            Opcode::SkipNextIfRegisterNotEqual { x: _, y: _ } => "SKIP.NE",
+
+            // Manipulate Vx
+            Opcode::LoadConstant { x: _, value: _ } => "LOAD",
+            Opcode::Load { x: _, y: _ } => "LOAD",
+            Opcode::Or { x: _, y: _ } => "OR",
+            Opcode::And { x: _, y: _ } => "AND",
+            Opcode::Xor { x: _, y: _ } => "XOR",
+            Opcode::Add { x: _, y: _ } => "ADD",
+            Opcode::AddConstant { x: _, value: _ } => "ADD",
+            Opcode::SubtractYFromX { x: _, y: _ } => "SUBYX",
+            Opcode::SubtractXFromY { x: _, y: _ } => "SUBXY",
+            Opcode::ShiftRight { x: _, y: _ } => "SHR",
+            Opcode::ShiftLeft { x: _, y: _ } => "SHL",
+
+            // Manipulate I
+            Opcode::IndexAddress(_) => "IDX",
+            Opcode::AddAddress { x: _ } => "ADD",
+            Opcode::IndexFont { x: _ } => "FONT",
+
+            // Manipulate Memory
+            Opcode::WriteMemory { x: _ } => "WRITE",
+            Opcode::WriteBCD { x: _ } => "BCD",
+            Opcode::ReadMemory { x: _ } => "READ",
+
+            // IO
+            Opcode::SkipIfKeyPressed { x: _ } => "SKIP.KEQ",
+            Opcode::SkipIfKeyNotPressed { x: _ } => "SKIP.KNE",
+            Opcode::WaitForKeyRelease { x: _ } => "KEY",
+            Opcode::LoadDelayIntoRegister { x: _ } => "LOAD",
+            Opcode::LoadRegisterIntoDelay { x: _ } => "LOAD",
+            Opcode::LoadRegisterIntoSound { x: _ } => "LOAD",
+            Opcode::Random { x: _, mask: _ } => "RAND",
+            Opcode::ClearScreen => "CLEAR",
+            Opcode::Draw { x: _, y: _, n: _ } => "DRAW",
+        }
+    }
+
+    pub fn to_assembly_args(&self) -> Option<String> {
+        None
     }
 }
 
