@@ -3,11 +3,13 @@ mod chip8_display;
 mod assembly_display;
 mod assets;
 mod register_display;
+mod help_display;
 
 pub use self::chipper_ui::ChipperUI;
 pub use self::chip8_display::Chip8Display;
 pub use self::assembly_display::AssemblyDisplay;
 pub use self::register_display::RegisterDisplay;
+pub use self::help_display::HelpDisplay;
 pub use self::assets::Assets;
 
 use nalgebra;

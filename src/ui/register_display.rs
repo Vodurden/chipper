@@ -1,8 +1,8 @@
 use ggez::{Context, GameResult};
-use ggez::graphics::{self, Text, DrawParam, DrawMode, FilterMode, Rect, Mesh, Color};
+use ggez::graphics::{self, Text, DrawParam, FilterMode};
 
 use crate::chip8::Chip8;
-use crate::ui::{Assets, Point2, Vector2};
+use crate::ui::{Assets, Point2};
 
 pub struct RegisterDisplay {
     /// The horizontal position of this display relative to the main window
@@ -15,7 +15,9 @@ pub struct RegisterDisplay {
 }
 
 impl RegisterDisplay {
-    pub const WIDTH: f32 = 150.0;
+    pub const WIDTH: f32 = 220.0;
+
+    #[allow(dead_code)]
     pub const HEIGHT: f32 = 320.0;
 
     const LINE_HEIGHT: f32 = 12.0;
@@ -25,25 +27,29 @@ impl RegisterDisplay {
         RegisterDisplay { x, y, text: Vec::new() }
     }
 
-    pub fn update(&mut self, ctx: &mut Context, assets: &Assets, chip8: &Chip8) -> GameResult<()> {
+    pub fn update(&mut self, assets: &Assets, chip8: &Chip8) -> GameResult<()> {
         self.text.clear();
 
+        let header_pos = Point2::new(self.x + 50.0, self.y);
+        let header_text = Text::new(("Registers".to_string(), assets.debug_font, RegisterDisplay::FONT_SIZE));
+        self.text.push((header_pos, header_text));
+
         // Show `PC` and `I`
-        self.push_line_col(assets, 0, 0, "PC".to_string(), format!("{:03X}", chip8.pc));
-        self.push_line_col(assets, 1, 0, "IX".to_string(), format!("{:03X}", chip8.i));
+        self.push_line_col(assets, 0, 2, "PC".to_string(), format!("{:03X}", chip8.pc));
+        self.push_line_col(assets, 1, 2, "IX".to_string(), format!("{:03X}", chip8.i));
+
+        // Show `DT` and `ST`
+        self.push_line_col(assets, 0, 3, "DT".to_string(), format!("{:02X}", chip8.delay_timer));
+        self.push_line_col(assets, 1, 3, "ST".to_string(), format!("{:02X}", chip8.sound_timer));
 
         // Generate `V` registers
-        let v_line_offset = 2;
+        let v_line_offset = 5;
         for (i, x) in (0..8).enumerate() {
             self.push_line_col(assets, 0, v_line_offset + i as u8, format!("V{:X}", i), format!("{:02X}", chip8.v[x]));
         }
         for (i, x) in (8..16).enumerate() {
             self.push_line_col(assets, 1, v_line_offset + i as u8, format!("V{:X}", i + 8), format!("{:02X}", chip8.v[x]));
         }
-
-        // Show `DT` and `ST`
-        self.push_line_col(assets, 0, 11, "DT".to_string(), format!("{:02X}", chip8.delay_timer));
-        self.push_line_col(assets, 1, 11, "ST".to_string(), format!("{:02X}", chip8.sound_timer));
 
         Ok(())
     }

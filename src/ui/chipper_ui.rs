@@ -6,11 +6,12 @@ use ggez::input::keyboard::{self, KeyCode};
 use ggez::timer;
 
 use crate::chip8::{Chip8, Chip8Output};
-use crate::ui::{Assets, AssemblyDisplay, Chip8Display, RegisterDisplay};
+use crate::ui::{Assets, AssemblyDisplay, Chip8Display, HelpDisplay, RegisterDisplay};
 
 pub struct ChipperUI {
     chip8: Chip8,
     assets: Assets,
+    help_display: HelpDisplay,
     register_display: RegisterDisplay,
     chip8_display: Chip8Display,
     assembly_window: AssemblyDisplay,
@@ -47,13 +48,15 @@ impl ChipperUI {
 
         let assets = Assets::load(ctx);
         let chip8 = Chip8::new();
-        let register_display = RegisterDisplay::new(0.0, 170.0);
+        let help_display = HelpDisplay::new(&assets, 20.0, 0.0);
+        let register_display = RegisterDisplay::new(20.0, HelpDisplay::HEIGHT);
         let chip8_display = Chip8Display::new(ctx, &chip8, RegisterDisplay::WIDTH, 0.0);
         let assembly_window = AssemblyDisplay::new(RegisterDisplay::WIDTH + Chip8Display::WIDTH, 0.0);
 
         ChipperUI {
             assets,
             chip8,
+            help_display,
             register_display,
             chip8_display,
             assembly_window
@@ -92,7 +95,7 @@ impl EventHandler for ChipperUI {
         let chip8_output = self.chip8.tick(delta_time);
 
         if chip8_output == Chip8Output::Tick || chip8_output == Chip8Output::Redraw {
-            self.register_display.update(ctx, &self.assets, &self.chip8)?;
+            self.register_display.update(&self.assets, &self.chip8)?;
             self.assembly_window.update(ctx, &self.assets, &self.chip8)?;
         }
 
@@ -108,7 +111,7 @@ impl EventHandler for ChipperUI {
 
         self.chip8_display.draw(ctx)?;
         self.assembly_window.draw(ctx)?;
-
+        self.help_display.draw(ctx)?;
         self.register_display.draw(ctx)?;
 
         // Draw code here...

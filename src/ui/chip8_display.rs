@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use ggez::{Context, GameResult};
-use ggez::graphics::{self, Image, DrawParam, FilterMode};
+use ggez::graphics::{self, Rect, Mesh, Image, DrawMode, DrawParam, FilterMode};
 
 use crate::chip8::Chip8;
 use crate::ui::{Point2, Vector2};
@@ -18,7 +18,10 @@ pub struct Chip8Display {
     ///
     /// We need to refresh `display_image` whenever `Chip8` executes `Opcode::Draw`.
     /// Otherwise we can just keep rendering this texture until something changes.
-    display_image: Image
+    display_image: Image,
+
+    /// `border` is the coloured border surrounding the game area
+    border: Mesh,
 }
 
 impl Chip8Display {
@@ -28,7 +31,12 @@ impl Chip8Display {
     pub fn new(ctx: &mut Context, chip8: &Chip8, x: f32, y: f32) -> Chip8Display {
         let display_image = Chip8Display::generate_display_image(ctx, chip8);
 
-        Chip8Display { x, y, display_image }
+        let border_thickness = 1.0;
+        let border = Rect::new(x - border_thickness, y - border_thickness, Chip8Display::WIDTH + border_thickness, Chip8Display::HEIGHT + border_thickness);
+        let border = Mesh::new_rectangle(ctx, DrawMode::stroke(border_thickness), border, graphics::WHITE)
+            .expect("Failed to construct border mesh");
+
+        Chip8Display { x, y, display_image, border }
     }
 
     pub fn update(&mut self, ctx: &mut Context, chip8: &Chip8) {
@@ -40,6 +48,8 @@ impl Chip8Display {
             .scale(Vector2::new(10.0, 10.0))
             .dest(Point2::new(self.x, self.y));
         graphics::draw(ctx, &self.display_image, draw_params)?;
+
+        graphics::draw(ctx, &self.border, DrawParam::default())?;
 
         Ok(())
     }
