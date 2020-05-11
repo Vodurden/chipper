@@ -1,4 +1,5 @@
 use std::cmp::{min, max};
+use std::time::Duration;
 use std::fs;
 use std::path::Path;
 use rand::prelude::*;
@@ -63,11 +64,23 @@ pub struct Chip8 {
     /// - Sounds the Chip-8 buzzer.
     pub sound_timer: u8,
 
+    /// `clock_speed` defines how often we `cycle` when calling `time`
+    pub clock_speed: Duration,
+
+    /// `timer_speed` defines how often we decrement `delay_timer` and `sound_timer`
+    pub timer_speed: Duration,
+
     /// Execution state, used to wait for keypresses
     state: Chip8State,
 
     /// Random Number Generator used for `Opcode::Random`
     rng: ChaCha8Rng,
+
+    /// Stores how much time has elapsed since our last `cycle()`
+    clock_tick_accumulator: Duration,
+
+    /// Stores how much time has elapsed since we last decreased `delay_timer` and `sound_timer`
+    timer_tick_accumulator: Duration,
 }
 
 #[derive(PartialEq)]
@@ -80,6 +93,16 @@ enum Chip8State {
 pub enum Chip8Output {
     None,
     Redraw
+}
+
+impl Chip8Output {
+    fn combine(x: Chip8Output, y: Chip8Output) -> Chip8Output {
+        match (x, y) {
+            (Chip8Output::Redraw, _) => Chip8Output::Redraw,
+            (_, Chip8Output::Redraw) => Chip8Output::Redraw,
+            _ => Chip8Output::None
+        }
+    }
 }
 
 impl Chip8 {
@@ -143,8 +166,13 @@ impl Chip8 {
             delay_timer: 0,
             sound_timer: 0,
 
+            clock_speed: Duration::from_secs_f64(1.0 / 500.0),
+            timer_speed: Duration::from_secs_f64(1.0 / 60.0),
+
             state: Chip8State::Running,
-            rng: ChaCha8Rng::from_entropy()
+            rng: ChaCha8Rng::from_entropy(),
+            clock_tick_accumulator: Duration::new(0, 0),
+            timer_tick_accumulator: Duration::new(0, 0),
         }
     }
 
@@ -212,6 +240,35 @@ impl Chip8 {
         self.opcodes(range_start, range_end)
     }
 
+    /// Tick the CPU forward by `delta` time. Depending on how much time
+    /// has elapsed this may:
+    ///
+    /// - `cycle` some number of times based on the clock speed
+    /// - decrement `sound_timer`
+    /// - decrement `delay_timer`
+    pub fn tick(&mut self, delta: Duration) -> Chip8Output {
+        self.clock_tick_accumulator += delta;
+
+        let mut output = Chip8Output::None;
+        while self.clock_tick_accumulator >= self.clock_speed {
+
+            self.clock_tick_accumulator -= self.clock_speed;
+
+            self.timer_tick_accumulator += self.clock_speed;
+            if self.timer_tick_accumulator > self.timer_speed {
+                self.delay_timer = self.delay_timer.saturating_sub(1);
+                self.sound_timer = self.sound_timer.saturating_sub(1);
+
+                self.timer_tick_accumulator -= self.timer_speed;
+            }
+
+            let next_output = self.cycle();
+            output = Chip8Output::combine(next_output, output);
+        }
+
+        output
+    }
+
     /// Execute one cycle of the chip8 interpreter.
     pub fn cycle(&mut self) -> Chip8Output {
         if self.state != Chip8State::Running {
@@ -221,14 +278,6 @@ impl Chip8 {
         // TODO: Better error handling
         let opcode = self.read_opcode().expect("Failed to read opcode");
         self.pc += 2;
-
-        if self.delay_timer > 0 {
-            self.delay_timer -= 1;
-        }
-
-        if self.sound_timer > 0 {
-            self.sound_timer -= 1;
-        }
 
         self.execute_opcode(opcode.clone());
 
@@ -457,6 +506,95 @@ mod tests {
         assert_eq!(chip8.pc, 0x200);
         chip8.cycle();
         assert_eq!(chip8.pc, 0x202);
+    }
+
+    #[test]
+    pub fn tick_cycles_cpu_after_enough_time_has_passed() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x0, value: 0xF }
+        ]));
+
+        assert_eq!(chip8.v[0x0], 0x0);
+        chip8.tick(chip8.clock_speed);
+        assert_eq!(chip8.v[0x0], 0xF);
+    }
+
+    #[test]
+    pub fn tick_does_not_cycle_if_not_enough_time_has_passed() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x0, value: 0xF }
+        ]));
+
+        chip8.tick(Duration::new(0, 0));
+        assert_eq!(chip8.v[0x0], 0x0);
+    }
+
+    #[test]
+    pub fn tick_cycles_multiple_times_if_a_lot_of_time_has_passed() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x0, value: 0x05 },
+            Opcode::LoadConstant { x: 0x1, value: 0xAA },
+            Opcode::LoadConstant { x: 0x2, value: 0xBB },
+        ]));
+
+        chip8.tick(chip8.clock_speed * 3);
+        assert_eq!(chip8.v[0x0], 0x05);
+        assert_eq!(chip8.v[0x1], 0xAA);
+        assert_eq!(chip8.v[0x2], 0xBB);
+    }
+
+    #[test]
+    pub fn tick_decreases_sound_timer_if_enough_time_has_passed() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x0, value: 0x8 },
+            Opcode::LoadRegisterIntoSound { x: 0x0 },
+
+            // Infinite Loop because decreasing sound takes many cycles
+            Opcode::LoadConstant { x: 0x1, value: 0xFA },
+            Opcode::Jump(Chip8::PROGRAM_START + 3 * 2)
+        ]));
+
+        chip8.tick(chip8.clock_speed * 2);
+        assert_eq!(chip8.sound_timer, 0x8);
+
+        chip8.tick(chip8.timer_speed);
+        assert_eq!(chip8.sound_timer, 0x7);
+    }
+
+    #[test]
+    pub fn tick_decreases_delay_timer_if_enough_time_has_passed() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x0, value: 0x8 },
+            Opcode::LoadRegisterIntoDelay { x: 0x0 },
+
+            // Infinite Loop because decreasing sound takes many cycles
+            Opcode::LoadConstant { x: 0x1, value: 0xFA },
+            Opcode::Jump(Chip8::PROGRAM_START + 3 * 2)
+        ]));
+
+        chip8.tick(chip8.clock_speed * 2);
+        assert_eq!(chip8.delay_timer, 0x8);
+
+        chip8.tick(chip8.timer_speed);
+        assert_eq!(chip8.delay_timer, 0x7);
+    }
+
+    /// When we call `tick` we may execute several cycles and decrease the timer several times.
+    ///
+    /// We need to ensure the operations are correctly interleaved.
+    #[test]
+    pub fn tick_interleaves_cycles_and_timers_correctly() {
+        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x0, value: 0x2 },
+            Opcode::LoadRegisterIntoDelay { x: 0x0 },
+            Opcode::LoadDelayIntoRegister { x: 0x0 },
+            Opcode::SkipNextIfEqual { x: 0x0, value: 0x0 },
+            Opcode::Jump(Chip8::PROGRAM_START + 2 * 2),
+            Opcode::LoadConstant { x: 0xA, value: 0xFF },
+        ]));
+
+        chip8.tick(chip8.clock_speed * 2 + chip8.timer_speed * 2 + chip8.clock_speed * 2);
+        assert_eq!(chip8.v[0xA], 0xFF);
     }
 
     #[test]
@@ -753,9 +891,9 @@ mod tests {
 
         chip8.cycle_n(3);
 
-        // Delay decreases by 1 per cycle so we expect our
-        // original delay -1
-        assert_eq!(chip8.v[0x1], 0x4);
+        // Delay only decreases when we use `tick` so it should
+        // be what we set
+        assert_eq!(chip8.v[0x1], 0x5);
     }
 
     #[test]

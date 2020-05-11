@@ -3,6 +3,7 @@ use ggez::conf::{WindowSetup, WindowMode};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Rect, FilterMode};
 use ggez::input::keyboard::{self, KeyCode};
+use ggez::timer;
 
 use crate::chip8::{Chip8, Chip8Output};
 use crate::ui::{Assets, AssemblyDisplay, Chip8Display};
@@ -84,7 +85,8 @@ impl EventHandler for ChipperUI {
         self.chip8.key(0xB, keyboard::is_key_pressed(ctx, KeyCode::C));
         self.chip8.key(0xF, keyboard::is_key_pressed(ctx, KeyCode::V));
 
-        let chip8_output = self.chip8.cycle();
+        let delta_time = timer::delta(ctx);
+        let chip8_output = self.chip8.tick(delta_time);
         match chip8_output {
             Chip8Output::Redraw => self.chip8_display.on_chip8_draw(ctx, &self.chip8),
             Chip8Output::None => {}

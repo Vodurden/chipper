@@ -28,6 +28,7 @@ impl AssemblyDisplay {
     pub const WIDTH: f32 = 220.0;
     pub const HEIGHT: f32 = 320.0;
 
+    const NUM_LINES: u16 = 25;
     const LINE_HEIGHT: f32 = 12.0;
     const FONT_SIZE: f32 = 16.0;
     const PADDING_LEFT: f32 = 10.0;
@@ -37,7 +38,7 @@ impl AssemblyDisplay {
             x,
             y,
             window_start_address: Chip8::PROGRAM_START,
-            window_end_address: Chip8::PROGRAM_START + (25 * 2),
+            window_end_address: Chip8::PROGRAM_START + (AssemblyDisplay::NUM_LINES * 2),
             text: Vec::new(),
             pc_highlight: None,
         }
@@ -46,9 +47,9 @@ impl AssemblyDisplay {
     pub fn update(&mut self, ctx: &mut Context, assets: &Assets, chip8: &Chip8) -> GameResult<()> {
         // If the window is not viewing the current instruction we should shift the window
         // and re-generate the text.
-        if chip8.pc < self.window_start_address || chip8.pc > self.window_end_address  {
+        if self.text.is_empty() || chip8.pc < self.window_start_address || chip8.pc > self.window_end_address  {
             self.window_start_address = chip8.pc - 2;
-            self.window_end_address = chip8.pc + (25 * 2);
+            self.window_end_address = chip8.pc + (AssemblyDisplay::NUM_LINES * 2);
 
             self.text.clear();
 
