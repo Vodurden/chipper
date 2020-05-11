@@ -47,7 +47,7 @@ impl AssemblyDisplay {
     pub fn update(&mut self, ctx: &mut Context, assets: &Assets, chip8: &Chip8) -> GameResult<()> {
         // If the window is not viewing the current instruction we should shift the window
         // and re-generate the text.
-        if self.text.is_empty() || chip8.pc < self.window_start_address || chip8.pc > self.window_end_address  {
+        if self.text.is_empty() || chip8.pc < self.window_start_address || chip8.pc > self.window_end_address - 1 {
             self.window_start_address = chip8.pc - 2;
             self.window_end_address = chip8.pc + (AssemblyDisplay::NUM_LINES * 2);
 
@@ -61,7 +61,7 @@ impl AssemblyDisplay {
                 );
 
                 let address_pos = origin;
-                let address_text = format!("{}", address);
+                let address_text = format!("{:X}", address);
                 let address_text = Text::new((address_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
                 self.text.push((address_pos, address_text));
 

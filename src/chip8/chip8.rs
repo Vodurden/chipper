@@ -70,6 +70,9 @@ pub struct Chip8 {
     /// `timer_speed` defines how often we decrement `delay_timer` and `sound_timer`
     pub timer_speed: Duration,
 
+    /// When `debug_mode` is true `tick` should do nothing. `step` needs to be used to advance the program.
+    pub debug_mode: bool,
+
     /// Execution state, used to wait for keypresses
     state: Chip8State,
 
@@ -172,6 +175,7 @@ impl Chip8 {
             clock_speed: Duration::from_secs_f64(1.0 / 500.0),
             timer_speed: Duration::from_secs_f64(1.0 / 60.0),
 
+            debug_mode: false,
             state: Chip8State::Running,
             rng: ChaCha8Rng::from_entropy(),
             clock_tick_accumulator: Duration::new(0, 0),
@@ -250,11 +254,24 @@ impl Chip8 {
     /// - decrement `sound_timer`
     /// - decrement `delay_timer`
     pub fn tick(&mut self, delta: Duration) -> Chip8Output {
+        if self.debug_mode {
+            return Chip8Output::None
+        }
+
+        self.tick_internal(delta)
+    }
+
+    /// Step the CPU forward by a fixed amount of time.
+    pub fn step(&mut self) -> Chip8Output {
+        self.tick_internal(self.clock_speed)
+    }
+
+    // Internal implementation of `tick` that ignores `debug_mode`
+    fn tick_internal(&mut self, delta: Duration) -> Chip8Output {
         self.clock_tick_accumulator += delta;
 
         let mut output = Chip8Output::None;
         while self.clock_tick_accumulator >= self.clock_speed {
-
             self.clock_tick_accumulator -= self.clock_speed;
 
             self.timer_tick_accumulator += self.clock_speed;
@@ -272,6 +289,7 @@ impl Chip8 {
 
         output
     }
+
 
     /// Execute one cycle of the chip8 interpreter.
     pub fn cycle(&mut self) -> Chip8Output {

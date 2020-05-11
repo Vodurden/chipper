@@ -2,7 +2,7 @@ use ggez::{Context, ContextBuilder, GameResult};
 use ggez::conf::{WindowSetup, WindowMode};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Rect, FilterMode};
-use ggez::input::keyboard::{self, KeyCode};
+use ggez::input::keyboard::{self, KeyCode, KeyMods};
 use ggez::timer;
 
 use crate::chip8::{Chip8, Chip8Output};
@@ -62,12 +62,37 @@ impl ChipperUI {
             assembly_window
         }
     }
+
+    fn refresh_chip8(&mut self, ctx: &mut Context, chip8_output: Chip8Output) -> GameResult<()> {
+        if chip8_output == Chip8Output::Tick || chip8_output == Chip8Output::Redraw {
+            self.register_display.update(&self.assets, &self.chip8)?;
+            self.assembly_window.update(ctx, &self.assets, &self.chip8)?;
+        }
+
+        if chip8_output == Chip8Output::Redraw {
+            self.chip8_display.update(ctx, &self.chip8)
+        }
+
+        Ok(())
+    }
+
 }
 
 impl EventHandler for ChipperUI {
     fn resize_event(&mut self, ctx: &mut Context, _width: f32, _height: f32) {
         graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, ChipperUI::WIDTH, ChipperUI::HEIGHT))
             .expect("Failed to set screen coordinates");
+    }
+
+    fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {
+        match keycode {
+            KeyCode::F5 => self.chip8.debug_mode = !self.chip8.debug_mode,
+            KeyCode::F6 => {
+                let chip8_output = self.chip8.step();
+                self.refresh_chip8(ctx, chip8_output);
+            },
+            _ => {}
+        }
     }
 
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
@@ -93,15 +118,7 @@ impl EventHandler for ChipperUI {
 
         let delta_time = timer::delta(ctx);
         let chip8_output = self.chip8.tick(delta_time);
-
-        if chip8_output == Chip8Output::Tick || chip8_output == Chip8Output::Redraw {
-            self.register_display.update(&self.assets, &self.chip8)?;
-            self.assembly_window.update(ctx, &self.assets, &self.chip8)?;
-        }
-
-        if chip8_output == Chip8Output::Redraw {
-            self.chip8_display.update(ctx, &self.chip8)
-        }
+        self.refresh_chip8(ctx, chip8_output);
 
         Ok(())
     }
