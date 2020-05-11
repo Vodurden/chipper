@@ -1,4 +1,5 @@
 use ggez::{Context, ContextBuilder, GameResult};
+use ggez::conf::{WindowSetup};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Rect, FilterMode};
 use ggez::input::keyboard::{self, KeyCode};
@@ -17,6 +18,7 @@ impl ChipperUI {
     pub fn run() {
         // Make a Context.
         let (mut ctx, mut event_loop) = ContextBuilder::new("chipper", "Jake Woods")
+            .window_setup(WindowSetup::default().title("Chipper"))
             .build()
             .expect("aieee, could not create ggez context!");
 
@@ -33,7 +35,6 @@ impl ChipperUI {
             Err(e) => println!("Error occured: {}", e)
         }
     }
-
 
     pub fn new(ctx: &mut Context) -> ChipperUI {
         graphics::set_default_filter(ctx, FilterMode::Nearest);
@@ -85,7 +86,7 @@ impl EventHandler for ChipperUI {
             Chip8Output::None => {}
         }
 
-        self.assembly_window.update(&self.assets, &self.chip8);
+        self.assembly_window.update(ctx, &self.assets, &self.chip8)?;
 
         Ok(())
     }
