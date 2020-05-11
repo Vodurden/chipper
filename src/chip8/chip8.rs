@@ -92,6 +92,7 @@ enum Chip8State {
 #[derive(PartialEq)]
 pub enum Chip8Output {
     None,
+    Tick,
     Redraw
 }
 
@@ -100,7 +101,9 @@ impl Chip8Output {
         match (x, y) {
             (Chip8Output::Redraw, _) => Chip8Output::Redraw,
             (_, Chip8Output::Redraw) => Chip8Output::Redraw,
-            _ => Chip8Output::None
+            (Chip8Output::Tick, _) => Chip8Output::Tick,
+            (_, Chip8Output::Tick) => Chip8Output::Tick,
+            _ => Chip8Output::None,
         }
     }
 }
@@ -262,8 +265,9 @@ impl Chip8 {
                 self.timer_tick_accumulator -= self.timer_speed;
             }
 
-            let next_output = self.cycle();
-            output = Chip8Output::combine(next_output, output);
+            let cycle_output = self.cycle();
+            output = Chip8Output::combine(output, Chip8Output::Tick);
+            output = Chip8Output::combine(output, cycle_output);
         }
 
         output

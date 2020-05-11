@@ -28,7 +28,7 @@ impl AssemblyDisplay {
     pub const WIDTH: f32 = 220.0;
     pub const HEIGHT: f32 = 320.0;
 
-    const NUM_LINES: u16 = 25;
+    const NUM_LINES: u16 = (AssemblyDisplay::HEIGHT / AssemblyDisplay::LINE_HEIGHT) as u16 - 1;
     const LINE_HEIGHT: f32 = 12.0;
     const FONT_SIZE: f32 = 16.0;
     const PADDING_LEFT: f32 = 10.0;
@@ -78,7 +78,7 @@ impl AssemblyDisplay {
         }
 
         let pc_window_index = (chip8.pc - self.window_start_address) / 2;
-        let pc_pos = Point2::new(self.x + AssemblyDisplay::PADDING_LEFT, pc_window_index as f32 * AssemblyDisplay::LINE_HEIGHT);
+        let pc_pos = Point2::new(self.x + AssemblyDisplay::PADDING_LEFT, self.y + pc_window_index as f32 * AssemblyDisplay::LINE_HEIGHT);
         let rect = Rect::new(pc_pos.x, pc_pos.y, AssemblyDisplay::WIDTH, AssemblyDisplay::LINE_HEIGHT);
         let rect = Mesh::new_rectangle(ctx, DrawMode::fill(), rect, Color::from_rgb(0xFF, 0x00, 0x00))?;
         self.pc_highlight = Some(rect);

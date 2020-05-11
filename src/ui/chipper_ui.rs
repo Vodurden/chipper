@@ -6,17 +6,18 @@ use ggez::input::keyboard::{self, KeyCode};
 use ggez::timer;
 
 use crate::chip8::{Chip8, Chip8Output};
-use crate::ui::{Assets, AssemblyDisplay, Chip8Display};
+use crate::ui::{Assets, AssemblyDisplay, Chip8Display, RegisterDisplay};
 
 pub struct ChipperUI {
     chip8: Chip8,
     assets: Assets,
+    register_display: RegisterDisplay,
     chip8_display: Chip8Display,
     assembly_window: AssemblyDisplay,
 }
 
 impl ChipperUI {
-    const WIDTH: f32 = Chip8Display::WIDTH + AssemblyDisplay::WIDTH;
+    const WIDTH: f32 = RegisterDisplay::WIDTH + Chip8Display::WIDTH + AssemblyDisplay::WIDTH;
     const HEIGHT: f32 = Chip8Display::HEIGHT;
 
     pub fn run() {
@@ -46,12 +47,14 @@ impl ChipperUI {
 
         let assets = Assets::load(ctx);
         let chip8 = Chip8::new();
-        let chip8_display = Chip8Display::new(ctx, &chip8);
-        let assembly_window = AssemblyDisplay::new(Chip8Display::WIDTH, 0.0);
+        let register_display = RegisterDisplay::new(0.0, 170.0);
+        let chip8_display = Chip8Display::new(ctx, &chip8, RegisterDisplay::WIDTH, 0.0);
+        let assembly_window = AssemblyDisplay::new(RegisterDisplay::WIDTH + Chip8Display::WIDTH, 0.0);
 
         ChipperUI {
             assets,
             chip8,
+            register_display,
             chip8_display,
             assembly_window
         }
@@ -87,12 +90,15 @@ impl EventHandler for ChipperUI {
 
         let delta_time = timer::delta(ctx);
         let chip8_output = self.chip8.tick(delta_time);
-        match chip8_output {
-            Chip8Output::Redraw => self.chip8_display.on_chip8_draw(ctx, &self.chip8),
-            Chip8Output::None => {}
+
+        if chip8_output == Chip8Output::Tick || chip8_output == Chip8Output::Redraw {
+            self.register_display.update(ctx, &self.assets, &self.chip8)?;
+            self.assembly_window.update(ctx, &self.assets, &self.chip8)?;
         }
 
-        self.assembly_window.update(ctx, &self.assets, &self.chip8)?;
+        if chip8_output == Chip8Output::Redraw {
+            self.chip8_display.update(ctx, &self.chip8)
+        }
 
         Ok(())
     }
@@ -102,6 +108,8 @@ impl EventHandler for ChipperUI {
 
         self.chip8_display.draw(ctx)?;
         self.assembly_window.draw(ctx)?;
+
+        self.register_display.draw(ctx)?;
 
         // Draw code here...
         graphics::present(ctx)

@@ -7,7 +7,7 @@ pub struct Assets {
 
 impl Assets {
     pub fn load(ctx: &mut Context) -> Assets {
-        let debug_font_bytes = std::include_bytes!("../../resources/font/slkscr.ttf");
+        let debug_font_bytes = std::include_bytes!("../../resources/font/5x5.ttf");
 
         let debug_font = Font::new_glyph_font_bytes(ctx, debug_font_bytes)
             .expect("Failed to load debug font");

@@ -3,11 +3,16 @@ use ggez::{Context, GameResult};
 use ggez::graphics::{self, Image, DrawParam, FilterMode};
 
 use crate::chip8::Chip8;
-use crate::ui::Vector2;
+use crate::ui::{Point2, Vector2};
 
 
 /// Displays a Chip8 device in a 640x320 area.
 pub struct Chip8Display {
+    /// The horizontal position of this display relative to the main window
+    x: f32,
+
+    /// The vertical position of this display relative to the main window
+    y: f32,
 
     /// `display_image` holds the texture derived from the Chip-8 graphics memory.
     ///
@@ -20,18 +25,20 @@ impl Chip8Display {
     pub const WIDTH: f32 = 640.0;
     pub const HEIGHT: f32 = 320.0;
 
-    pub fn new(ctx: &mut Context, chip8: &Chip8) -> Chip8Display {
+    pub fn new(ctx: &mut Context, chip8: &Chip8, x: f32, y: f32) -> Chip8Display {
         let display_image = Chip8Display::generate_display_image(ctx, chip8);
 
-        Chip8Display { display_image }
+        Chip8Display { x, y, display_image }
     }
 
-    pub fn on_chip8_draw(&mut self, ctx: &mut Context, chip8: &Chip8) {
+    pub fn update(&mut self, ctx: &mut Context, chip8: &Chip8) {
         self.display_image = Chip8Display::generate_display_image(ctx, chip8);
     }
 
     pub fn draw(&self, ctx: &mut Context) -> GameResult<()> {
-        let draw_params = DrawParam::default().scale(Vector2::new(10.0, 10.0));
+        let draw_params = DrawParam::default()
+            .scale(Vector2::new(10.0, 10.0))
+            .dest(Point2::new(self.x, self.y));
         graphics::draw(ctx, &self.display_image, draw_params)?;
 
         Ok(())
