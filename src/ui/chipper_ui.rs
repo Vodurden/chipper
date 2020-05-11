@@ -1,5 +1,5 @@
 use ggez::{Context, ContextBuilder, GameResult};
-use ggez::conf::{WindowSetup};
+use ggez::conf::{WindowSetup, WindowMode};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Rect, FilterMode};
 use ggez::input::keyboard::{self, KeyCode};
@@ -15,10 +15,14 @@ pub struct ChipperUI {
 }
 
 impl ChipperUI {
+    const WIDTH: f32 = Chip8Display::WIDTH + AssemblyDisplay::WIDTH;
+    const HEIGHT: f32 = Chip8Display::HEIGHT;
+
     pub fn run() {
         // Make a Context.
         let (mut ctx, mut event_loop) = ContextBuilder::new("chipper", "Jake Woods")
             .window_setup(WindowSetup::default().title("Chipper"))
+            .window_mode(WindowMode::default().dimensions(ChipperUI::WIDTH, ChipperUI::HEIGHT))
             .build()
             .expect("aieee, could not create ggez context!");
 
@@ -42,7 +46,7 @@ impl ChipperUI {
         let assets = Assets::load(ctx);
         let chip8 = Chip8::new();
         let chip8_display = Chip8Display::new(ctx, &chip8);
-        let assembly_window = AssemblyDisplay::new(640.0, 0.0);
+        let assembly_window = AssemblyDisplay::new(Chip8Display::WIDTH, 0.0);
 
         ChipperUI {
             assets,
@@ -55,7 +59,7 @@ impl ChipperUI {
 
 impl EventHandler for ChipperUI {
     fn resize_event(&mut self, ctx: &mut Context, _width: f32, _height: f32) {
-        graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, 860.0, 320.0))
+        graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, ChipperUI::WIDTH, ChipperUI::HEIGHT))
             .expect("Failed to set screen coordinates");
     }
 

@@ -25,7 +25,8 @@ pub struct AssemblyDisplay {
 }
 
 impl AssemblyDisplay {
-    const WIDTH: f32 = 220.0;
+    pub const WIDTH: f32 = 220.0;
+    pub const HEIGHT: f32 = 320.0;
 
     const LINE_HEIGHT: f32 = 12.0;
     const FONT_SIZE: f32 = 16.0;

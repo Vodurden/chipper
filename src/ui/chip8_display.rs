@@ -17,6 +17,9 @@ pub struct Chip8Display {
 }
 
 impl Chip8Display {
+    pub const WIDTH: f32 = 640.0;
+    pub const HEIGHT: f32 = 320.0;
+
     pub fn new(ctx: &mut Context, chip8: &Chip8) -> Chip8Display {
         let display_image = Chip8Display::generate_display_image(ctx, chip8);
 
