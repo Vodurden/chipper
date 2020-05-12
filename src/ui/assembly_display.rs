@@ -2,7 +2,7 @@ use ggez::{Context, GameResult};
 use ggez::graphics::{self, Text, DrawParam, DrawMode, FilterMode, Rect, Mesh, Color};
 
 use crate::chip8::Chip8;
-use crate::ui::{Assets, Point2, Vector2};
+use crate::ui::{Chip8Display, Assets, Point2, Vector2};
 
 /// Display the currently executing opcodes of a `Chip8` within a
 /// 220x320 pixel window.
@@ -25,13 +25,19 @@ pub struct AssemblyDisplay {
 }
 
 impl AssemblyDisplay {
-    pub const WIDTH: f32 = 220.0;
-    pub const HEIGHT: f32 = 320.0;
+    pub const SCALE: f32 = Chip8Display::SCALE;
+    pub const WIDTH: f32 = 22.0 * AssemblyDisplay::SCALE;
+    pub const HEIGHT: f32 = 32.0 * AssemblyDisplay::SCALE;
 
     const NUM_LINES: u16 = (AssemblyDisplay::HEIGHT / AssemblyDisplay::LINE_HEIGHT) as u16 - 1;
-    const LINE_HEIGHT: f32 = 12.0;
-    const FONT_SIZE: f32 = 16.0;
-    const PADDING_LEFT: f32 = 10.0;
+
+    const LINE_HEIGHT: f32 = 1.2 * AssemblyDisplay::SCALE;
+    const FONT_SIZE: f32 = 1.6 * AssemblyDisplay::SCALE;
+    const PADDING_LEFT: f32 = 1.0 * AssemblyDisplay::SCALE;
+
+    const ADDRESS_X_OFFSET: f32 = 0.0 * AssemblyDisplay::SCALE;
+    const OPCODE_X_OFFSET: f32 = 3.6 * AssemblyDisplay::SCALE;
+    const OPCODE_ARG_X_OFFSET: f32 = 8.0 * AssemblyDisplay::SCALE;
 
     pub fn new(x: f32, y: f32) -> AssemblyDisplay {
         AssemblyDisplay {
@@ -60,17 +66,17 @@ impl AssemblyDisplay {
                     self.y + ((i as f32) * AssemblyDisplay::LINE_HEIGHT)
                 );
 
-                let address_pos = origin;
+                let address_pos = origin + Vector2::new(AssemblyDisplay::ADDRESS_X_OFFSET, 0.0);
                 let address_text = format!("{:X}", address);
                 let address_text = Text::new((address_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
                 self.text.push((address_pos, address_text));
 
-                let opcode_pos = address_pos + Vector2::new(36.0, 0.0);
+                let opcode_pos = address_pos + Vector2::new(AssemblyDisplay::OPCODE_X_OFFSET, 0.0);
                 let opcode_text = opcode.to_assembly_name();
                 let opcode_text = Text::new((opcode_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
                 self.text.push((opcode_pos, opcode_text));
 
-                let opcode_arg_pos = opcode_pos + Vector2::new(80.0, 0.0);
+                let opcode_arg_pos = opcode_pos + Vector2::new(AssemblyDisplay::OPCODE_ARG_X_OFFSET, 0.0);
                 let opcode_arg_text = opcode.to_assembly_args().unwrap_or(String::new());
                 let opcode_arg_text = Text::new((opcode_arg_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
                 self.text.push((opcode_arg_pos, opcode_arg_text));
@@ -79,7 +85,7 @@ impl AssemblyDisplay {
 
         let pc_window_index = (chip8.pc - self.window_start_address) / 2;
         let pc_pos = Point2::new(self.x + AssemblyDisplay::PADDING_LEFT, self.y + pc_window_index as f32 * AssemblyDisplay::LINE_HEIGHT);
-        let rect = Rect::new(pc_pos.x, pc_pos.y, AssemblyDisplay::WIDTH, AssemblyDisplay::LINE_HEIGHT);
+        let rect = Rect::new(pc_pos.x, pc_pos.y, AssemblyDisplay::WIDTH, AssemblyDisplay::LINE_HEIGHT + 4.0);
         let rect = Mesh::new_rectangle(ctx, DrawMode::fill(), rect, Color::from_rgb(0xFF, 0x00, 0x00))?;
         self.pc_highlight = Some(rect);
 

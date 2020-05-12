@@ -25,8 +25,9 @@ pub struct Chip8Display {
 }
 
 impl Chip8Display {
-    pub const WIDTH: f32 = 640.0;
-    pub const HEIGHT: f32 = 320.0;
+    pub const SCALE: f32 = 20.0;
+    pub const WIDTH: f32 = 64.0 * Chip8Display::SCALE;
+    pub const HEIGHT: f32 = 32.0 * Chip8Display::SCALE;
 
     pub fn new(ctx: &mut Context, chip8: &Chip8, x: f32, y: f32) -> Chip8Display {
         let display_image = Chip8Display::generate_display_image(ctx, chip8);
@@ -45,7 +46,7 @@ impl Chip8Display {
 
     pub fn draw(&self, ctx: &mut Context) -> GameResult<()> {
         let draw_params = DrawParam::default()
-            .scale(Vector2::new(10.0, 10.0))
+            .scale(Vector2::new(Chip8Display::SCALE, Chip8Display::SCALE))
             .dest(Point2::new(self.x, self.y));
         graphics::draw(ctx, &self.display_image, draw_params)?;
 

@@ -2,7 +2,7 @@ use ggez::{Context, GameResult};
 use ggez::graphics::{self, Text, DrawParam, FilterMode};
 
 use crate::chip8::Chip8;
-use crate::ui::{Assets, Point2};
+use crate::ui::{Assets, Chip8Display, Point2};
 
 pub struct RegisterDisplay {
     /// The horizontal position of this display relative to the main window
@@ -15,13 +15,18 @@ pub struct RegisterDisplay {
 }
 
 impl RegisterDisplay {
-    pub const WIDTH: f32 = 220.0;
+    pub const SCALE: f32 = Chip8Display::SCALE;
+    pub const WIDTH: f32 = 22.0 * RegisterDisplay::SCALE;
 
     #[allow(dead_code)]
-    pub const HEIGHT: f32 = 320.0;
+    pub const HEIGHT: f32 = 32.0 * RegisterDisplay::SCALE;
 
-    const LINE_HEIGHT: f32 = 12.0;
-    const FONT_SIZE: f32 = 16.0;
+    const LINE_HEIGHT: f32 = 1.2 * RegisterDisplay::SCALE;
+    const FONT_SIZE: f32 = 1.6 * RegisterDisplay::SCALE;
+
+    const KEY_X_OFFSET: f32 = 0.0 * RegisterDisplay::SCALE;
+    const SEP_X_OFFSET: f32 = 2.5 * RegisterDisplay::SCALE;
+    const VALUE_X_OFFSET: f32 = 1.5 * RegisterDisplay::SCALE;
 
     pub fn new(x: f32, y: f32) -> RegisterDisplay {
         RegisterDisplay { x, y, text: Vec::new() }
@@ -55,9 +60,9 @@ impl RegisterDisplay {
     }
 
     fn push_line_col(&mut self, assets: &Assets, col: u8, line: u8, key: String, value: String) {
-        let key_x = self.x + (col as f32 * RegisterDisplay::WIDTH / 2.0);
-        let sep_x = key_x + 25.0;
-        let value_x = sep_x + 15.0;
+        let key_x = self.x + (col as f32 * RegisterDisplay::WIDTH / 2.0) + RegisterDisplay::KEY_X_OFFSET;
+        let sep_x = key_x + RegisterDisplay::SEP_X_OFFSET;
+        let value_x = sep_x + RegisterDisplay::VALUE_X_OFFSET;
         let line_y = self.y + (line as f32) * RegisterDisplay::LINE_HEIGHT;
 
         let key_pos = Point2::new(key_x, line_y);

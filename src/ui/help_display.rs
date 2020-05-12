@@ -1,19 +1,20 @@
 use ggez::{Context, GameResult};
 use ggez::graphics::{self, Text, DrawParam, FilterMode};
 
-use crate::ui::{Assets, Point2};
+use crate::ui::{Assets, Chip8Display, Point2};
 
 pub struct HelpDisplay {
     text: Vec<(Point2, Text)>
 }
 
 impl HelpDisplay {
+    pub const SCALE: f32 = Chip8Display::SCALE;
     #[allow(dead_code)]
-    pub const WIDTH: f32 = 150.0;
-    pub const HEIGHT: f32 = 156.0;
+    pub const WIDTH: f32 = 15.0 * HelpDisplay::SCALE;
+    pub const HEIGHT: f32 = 15.6 * HelpDisplay::SCALE;
 
-    const LINE_HEIGHT: f32 = 12.0;
-    const FONT_SIZE: f32 = 16.0;
+    const LINE_HEIGHT: f32 = 1.2 * HelpDisplay::SCALE;
+    const FONT_SIZE: f32 = 1.6 * HelpDisplay::SCALE;
 
     pub fn new(assets: &Assets, x: f32, y: f32) -> HelpDisplay {
         // Horrible spacing to make things line up properly. For some reason
