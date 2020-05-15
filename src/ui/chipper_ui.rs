@@ -1,9 +1,11 @@
+use std::thread;
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::conf::{WindowSetup, WindowMode};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Rect, FilterMode};
 use ggez::input::keyboard::{self, KeyCode, KeyMods};
 use ggez::timer;
+use tinyfiledialogs;
 
 use crate::chip8::{Chip8, Chip8Output};
 use crate::ui::{Assets, AssemblyDisplay, Chip8Display, HelpDisplay, RegisterDisplay};
@@ -34,8 +36,6 @@ impl ChipperUI {
         // use when setting your game up.
         let mut chipper_ui = ChipperUI::new(&mut ctx);
 
-        chipper_ui.chip8.load_rom_from_file("./roms/PONG").expect("Failed to load ROM");
-
         // Run!
         match event::run(&mut ctx, &mut event_loop, &mut chipper_ui) {
             Ok(_) => println!("Exited cleanly."),
@@ -47,7 +47,7 @@ impl ChipperUI {
         graphics::set_default_filter(ctx, FilterMode::Nearest);
 
         let assets = Assets::load(ctx);
-        let chip8 = Chip8::new();
+        let chip8 = Chip8::new_with_default_rom();
         let help_display = HelpDisplay::new(&assets, 20.0, 0.0);
         let register_display = RegisterDisplay::new(20.0, HelpDisplay::HEIGHT);
         let chip8_display = Chip8Display::new(ctx, &chip8, RegisterDisplay::WIDTH, 0.0);
@@ -60,6 +60,19 @@ impl ChipperUI {
             register_display,
             chip8_display,
             assembly_window
+        }
+    }
+
+    fn load_rom_from_dialog(&mut self) {
+        let current_dir = std::env::current_dir()
+            .ok()
+            .map(|x| x.to_string_lossy().into_owned())
+            .unwrap_or(String::new().into());
+
+        println!("Current dir: {}", current_dir);
+
+        if let Some(file_path) = tinyfiledialogs::open_file_dialog("Choose a Chip 8 ROM", &current_dir, None) {
+            self.chip8 = Chip8::new_with_rom_from_file(file_path).expect("Failed to load ROM");
         }
     }
 
@@ -86,10 +99,16 @@ impl EventHandler for ChipperUI {
 
     fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {
         match keycode {
+            KeyCode::F2 => self.load_rom_from_dialog(),
+            KeyCode::F3 => {
+                self.load_rom_from_dialog();
+                self.chip8.debug_mode = true;
+            }
             KeyCode::F5 => self.chip8.debug_mode = !self.chip8.debug_mode,
             KeyCode::F6 => {
                 let chip8_output = self.chip8.step();
-                self.refresh_chip8(ctx, chip8_output);
+                self.refresh_chip8(ctx, chip8_output)
+                    .expect("Failed to refresh chip8");
             },
             _ => {}
         }
@@ -118,7 +137,7 @@ impl EventHandler for ChipperUI {
 
         let delta_time = timer::delta(ctx);
         let chip8_output = self.chip8.tick(delta_time);
-        self.refresh_chip8(ctx, chip8_output);
+        self.refresh_chip8(ctx, chip8_output)?;
 
         Ok(())
     }
@@ -132,6 +151,15 @@ impl EventHandler for ChipperUI {
         self.register_display.draw(ctx)?;
 
         // Draw code here...
-        graphics::present(ctx)
+        graphics::present(ctx)?;
+
+        // We don't need to run faster then the chip8 clock speed and
+        // we can tolerate longer sleeps by simulating multiple cycles
+        // in the same step.
+        //
+        // This means we can rely on sleep to help avoid hammering the CPU
+        thread::sleep(self.chip8.clock_speed);
+
+        Ok(())
     }
 }

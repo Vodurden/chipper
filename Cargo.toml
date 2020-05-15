@@ -11,3 +11,4 @@ rand = "0.7.3"
 rand_chacha = "0.2.2"
 ggez = "0.5.1"
 nalgebra = { version = "0.21.0", features=["mint"] }
+tinyfiledialogs = "3.0"

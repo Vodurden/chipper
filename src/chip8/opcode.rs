@@ -494,7 +494,7 @@ impl Opcode {
 
     pub fn to_assembly_args(&self) -> Option<String> {
         let fmt_addr = |addr| Some(format!("{:03X}", addr));
-        let fmt_reg_value = |x, value| Some(format!("V{:X}, {}", x, value));
+        let fmt_reg_value = |x, value| Some(format!("V{:X}, {:02X}", x, value));
         let fmt_reg_reg = |x, y| Some(format!("V{:X}, V{:X}", x, y));
         let fmt_reg = |x| Some(format!("V{:X}", x));
 

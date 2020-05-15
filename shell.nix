@@ -14,6 +14,7 @@ pkgs.mkShell {
     pkgconfig
 
     x11
+    gnome3.zenity # for tinyfilepicker
   ];
 
   APPEND_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [

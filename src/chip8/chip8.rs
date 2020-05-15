@@ -1,4 +1,3 @@
-use std::cmp::{min, max};
 use std::time::Duration;
 use std::fs;
 use std::path::Path;
@@ -153,8 +152,26 @@ impl Chip8 {
 
     pub fn new_with_rom(rom_bytes: Vec<u8>) -> Chip8 {
         let mut chip8 = Chip8::new();
-        chip8.load_rom(rom_bytes);
+        let rom_start = Chip8::PROGRAM_START as usize;
+        let rom_end = rom_start + rom_bytes.len();
+        chip8.memory[rom_start..rom_end].copy_from_slice(&rom_bytes[..]);
         chip8
+    }
+
+    pub fn new_with_default_rom() -> Chip8 {
+        // Default ROM: Just loop forever
+        // TODO: Do something fun here
+        let default_rom = Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x0, value: 0x0 },
+            Opcode::Jump(Chip8::PROGRAM_START)
+        ]);
+
+        Chip8::new_with_rom(default_rom)
+    }
+
+    pub fn new_with_rom_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Chip8> {
+        let rom = fs::read(path)?;
+        Ok(Chip8::new_with_rom(rom))
     }
 
     /// Returns a Chip8 with _no initialized memory_
@@ -186,19 +203,6 @@ impl Chip8 {
     pub fn with_seed(&mut self, seed: u64) -> &mut Self {
         self.rng = ChaCha8Rng::seed_from_u64(seed);
         self
-    }
-
-    pub fn load_rom(&mut self, rom_bytes: Vec<u8>) {
-        let rom_start = 0x200;
-        let rom_end = rom_start + rom_bytes.len();
-        self.memory[rom_start..rom_end].copy_from_slice(&rom_bytes[..]);
-    }
-
-    pub fn load_rom_from_file<P: AsRef<Path>>(&mut self, path: P) -> std::io::Result<()> {
-        let rom_bytes = fs::read(path)?;
-        self.load_rom(rom_bytes);
-
-        Ok(())
     }
 
     pub fn key(&mut self, key: u8, pressed: bool) {
@@ -237,16 +241,6 @@ impl Chip8 {
         result
     }
 
-    /// Return a "window" of (address, opcodes) centered on the currently executing code.
-    pub fn current_opcode_window(&self, window_size: u16) -> Vec<(u16, Opcode)> {
-        // We use the full window size in both directions because each opcode
-        // takes two bytes
-        let range_start = max(Chip8::PROGRAM_START as u16, self.pc - (window_size * 2));
-        let range_end = min(Chip8::MEMORY - 2, self.pc + (window_size * 2));
-
-        self.opcodes(range_start, range_end)
-    }
-
     /// Tick the CPU forward by `delta` time. Depending on how much time
     /// has elapsed this may:
     ///
@@ -273,7 +267,6 @@ impl Chip8 {
         let mut output = Chip8Output::None;
         while self.clock_tick_accumulator >= self.clock_speed {
             self.clock_tick_accumulator -= self.clock_speed;
-
             self.timer_tick_accumulator += self.clock_speed;
             if self.timer_tick_accumulator > self.timer_speed {
                 self.delay_timer = self.delay_timer.saturating_sub(1);
@@ -502,15 +495,15 @@ impl Chip8 {
 
     fn op_write_memory(&mut self, x: Register) {
         for register in 0..=(x as usize) {
-            self.memory[self.i as usize] = self.v[register];
-            self.i += 1;
+            self.memory[self.i as usize + register] = self.v[register];
+            // self.i += 1;
         }
     }
 
     fn op_read_memory(&mut self, x: Register) {
         for register in 0..=(x as usize) {
-            self.v[register] = self.memory[self.i as usize];
-            self.i += 1;
+            self.v[register] = self.memory[self.i as usize + register];
+            // self.i += 1;
         }
     }
 }
@@ -1223,7 +1216,7 @@ mod tests {
         assert_eq!(chip8.memory[0x200 + 100], 0xFF);
         assert_eq!(chip8.memory[0x200 + 101], 0xAA);
         assert_eq!(chip8.memory[0x200 + 102], 0xBB);
-        assert_eq!(chip8.i, 0x200 + 102 + 1);
+        assert_eq!(chip8.i, 0x200 + 100);
     }
 
     /// When using multiple `Opcode::WriteMemory`'s sequentually we expect it to start writing from
@@ -1259,7 +1252,7 @@ mod tests {
 
         assert_eq!(chip8.v[0x0], 0xAA);
         assert_eq!(chip8.v[0x1], 0xFA);
-        assert_eq!(chip8.i, 0x200 + 4 + 2)
+        assert_eq!(chip8.i, 0x200 + 4);
     }
 
 

@@ -3,6 +3,7 @@
 Here's a list of all the articles I viewed while writing this project, roughly ordered by how much time I spent looking at each one:
 
 - [Mastering Chip-8](http://mattmik.com/files/chip8/mastering/chip8.html)
+- [Chip-8 Compatibility](https://gist.github.com/tobiasvl/a0e43bdcd64d9ef6be35f5c67fcff0dd)
 - [Chip-8 Technical Reference (Matthew Mikolay)](https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Technical-Reference)
 - [Chip-8 Technical Reference (Thomas P. Greene)](http://devernay.free.fr/hacks/chip8/C8TECH10.HTM)
 - [How to write an emulator (CHIP-8 interpreter)](http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/)
