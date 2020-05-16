@@ -150,7 +150,6 @@ impl EventHandler for ChipperUI {
         self.help_display.draw(ctx)?;
         self.register_display.draw(ctx)?;
 
-        // Draw code here...
         graphics::present(ctx)?;
 
         // We don't need to run faster then the chip8 clock speed and

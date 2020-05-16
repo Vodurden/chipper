@@ -1,9 +1,9 @@
 mod chip8;
 mod chip8_error;
 mod opcode;
+mod quirks;
 
-pub use self::chip8::Chip8;
-pub use self::chip8::Chip8Output;
+pub use self::chip8::{Chip8, Chip8Output};
 pub use self::opcode::Opcode;
 pub use self::chip8_error::Chip8Error;
 

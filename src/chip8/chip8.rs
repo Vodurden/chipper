@@ -5,6 +5,7 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 use crate::chip8::{Opcode, Register, Address, Chip8Result};
+use crate::chip8::quirks::{ReadWriteIncrementQuirk, BitShiftQuirk};
 
 /// `Chip8` is the core emulation structure of this project. It implements the memory and opcodes
 /// of the Chip-8 architecture.
@@ -72,6 +73,10 @@ pub struct Chip8 {
     /// When `debug_mode` is true `tick` should do nothing. `step` needs to be used to advance the program.
     pub debug_mode: bool,
 
+    read_write_increment_quirk: ReadWriteIncrementQuirk,
+
+    bit_shift_quirk: BitShiftQuirk,
+
     /// Execution state, used to wait for keypresses
     state: Chip8State,
 
@@ -84,6 +89,8 @@ pub struct Chip8 {
     /// Stores how much time has elapsed since we last decreased `delay_timer` and `sound_timer`
     timer_tick_accumulator: Duration,
 }
+
+
 
 #[derive(PartialEq)]
 enum Chip8State {
@@ -193,6 +200,9 @@ impl Chip8 {
             timer_speed: Duration::from_secs_f64(1.0 / 60.0),
 
             debug_mode: false,
+            read_write_increment_quirk: ReadWriteIncrementQuirk::default(),
+            bit_shift_quirk: BitShiftQuirk::default(),
+
             state: Chip8State::Running,
             rng: ChaCha8Rng::from_entropy(),
             clock_tick_accumulator: Duration::new(0, 0),
@@ -200,8 +210,18 @@ impl Chip8 {
         }
     }
 
-    pub fn with_seed(&mut self, seed: u64) -> &mut Self {
+    pub fn with_seed(mut self, seed: u64) -> Self {
         self.rng = ChaCha8Rng::seed_from_u64(seed);
+        self
+    }
+
+    pub fn with_read_write_increment_quirk(mut self, quirk: ReadWriteIncrementQuirk) -> Self {
+        self.read_write_increment_quirk = quirk;
+        self
+    }
+
+    pub fn with_bit_shift_quirk(mut self, quirk: BitShiftQuirk) -> Self {
+        self.bit_shift_quirk = quirk;
         self
     }
 
@@ -225,7 +245,9 @@ impl Chip8 {
         self.key(key, false);
     }
 
-    pub fn opcodes(&self, start_addr: u16, end_addr: u16) -> Vec<(u16, Opcode)> {
+    /// Return (Address, Opcode) from the chip8 memory for all opcodes that fall
+    /// within `start_addr..end_addr`
+    pub fn opcodes(&self, start_addr: Address, end_addr: Address) -> Vec<(Address, Opcode)> {
         let start_addr = start_addr as usize;
         let end_addr = end_addr as usize;
 
@@ -457,16 +479,26 @@ impl Chip8 {
         self.v[0xF] = carry as u8;
     }
 
-    fn op_shift_right(&mut self, x: Register, _: Register) {
-        let least_significant_bit = self.v[x as usize] & 0b00000001;
+    fn op_shift_right(&mut self, x: Register, y: Register) {
+        let source: &mut u8 = match self.bit_shift_quirk {
+            BitShiftQuirk::ShiftYIntoX => &mut self.v[y as usize],
+            BitShiftQuirk::ShiftX => &mut self.v[x as usize],
+        };
+
+        let least_significant_bit = *source & 0b00000001;
+        self.v[x as usize] = source.wrapping_shr(1);
         self.v[0xF] = least_significant_bit;
-        self.v[x as usize] = self.v[x as usize].wrapping_shr(1);
     }
 
-    fn op_shift_left(&mut self, x: Register, _: Register) {
-        let most_significant_bit = (self.v[x as usize] >> 7) & 1;
+    fn op_shift_left(&mut self, x: Register, y: Register) {
+        let source: &mut u8 = match self.bit_shift_quirk {
+            BitShiftQuirk::ShiftYIntoX => &mut self.v[y as usize],
+            BitShiftQuirk::ShiftX => &mut self.v[x as usize],
+        };
+
+        let most_significant_bit = (*source >> 7) & 1;
+        self.v[x as usize] = source.wrapping_shl(1);
         self.v[0xF] = most_significant_bit;
-        self.v[x as usize] = self.v[x as usize].wrapping_shl(1);
     }
 
     fn op_draw(&mut self, x: Register, y: Register, n: u8) {
@@ -496,14 +528,20 @@ impl Chip8 {
     fn op_write_memory(&mut self, x: Register) {
         for register in 0..=(x as usize) {
             self.memory[self.i as usize + register] = self.v[register];
-            // self.i += 1;
+        }
+
+        if self.read_write_increment_quirk == ReadWriteIncrementQuirk::IncrementIndex {
+            self.i += (x + 1) as u16;
         }
     }
 
     fn op_read_memory(&mut self, x: Register) {
         for register in 0..=(x as usize) {
             self.v[register] = self.memory[self.i as usize + register];
-            // self.i += 1;
+        }
+
+        if self.read_write_increment_quirk == ReadWriteIncrementQuirk::IncrementIndex {
+            self.i += (x + 1) as u16;
         }
     }
 }
@@ -913,11 +951,13 @@ mod tests {
 
     #[test]
     pub fn op_random_can_be_deterministicly_seeded() {
-        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+        let rom = Opcode::to_rom(vec![
             Opcode::Random { x: 0, mask: 0xFF },
             Opcode::Random { x: 1, mask: 0xFF }
-        ]));
-        chip8.with_seed(0);
+        ]);
+
+        let mut chip8 = Chip8::new_with_rom(rom)
+            .with_seed(0);
 
         chip8.cycle_n(2);
 
@@ -1083,6 +1123,22 @@ mod tests {
     }
 
     #[test]
+    pub fn op_shift_right_shift_y_into_x_quirk() {
+        let rom = Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x1, value: 0b00000011 },
+            Opcode::ShiftRight { x: 0x0, y: 0x1 }
+        ]);
+        let mut chip8 = Chip8::new_with_rom(rom)
+            .with_bit_shift_quirk(BitShiftQuirk::ShiftYIntoX);
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0b00000001);
+        assert_eq!(chip8.v[0x1], 0b00000011);
+        assert_eq!(chip8.v[0xF], 0x1);
+    }
+
+    #[test]
     pub fn op_shift_left() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::LoadConstant { x: 0x0, value: 0b00000011 },
@@ -1104,6 +1160,22 @@ mod tests {
         chip8.cycle_n(2);
 
         assert_eq!(chip8.v[0x0], 0b00000110);
+        assert_eq!(chip8.v[0xF], 0x1);
+    }
+
+    #[test]
+    pub fn op_shift_left_shift_y_into_x_quirk() {
+        let rom = Opcode::to_rom(vec![
+            Opcode::LoadConstant { x: 0x1, value: 0b10000011 },
+            Opcode::ShiftLeft { x: 0x0, y: 0x1 }
+        ]);
+        let mut chip8 = Chip8::new_with_rom(rom)
+            .with_bit_shift_quirk(BitShiftQuirk::ShiftYIntoX);
+
+        chip8.cycle_n(2);
+
+        assert_eq!(chip8.v[0x0], 0b00000110);
+        assert_eq!(chip8.v[0x1], 0b10000011);
         assert_eq!(chip8.v[0xF], 0x1);
     }
 
@@ -1223,7 +1295,7 @@ mod tests {
     /// where the previous write stopped.
     #[test]
     pub fn op_write_memory_consecutive() {
-        let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
+        let rom = Opcode::to_rom(vec![
             Opcode::IndexAddress(0x200 + 100),
             Opcode::LoadConstant { x: 0x0, value: 0xFF },
             Opcode::LoadConstant { x: 0x1, value: 0xAA },
@@ -1231,7 +1303,9 @@ mod tests {
             Opcode::LoadConstant { x: 0x0, value: 0x11 },
             Opcode::LoadConstant { x: 0x1, value: 0x21 },
             Opcode::WriteMemory { x: 0x1 }
-        ]));
+        ]);
+        let mut chip8 = Chip8::new_with_rom(rom)
+            .with_read_write_increment_quirk(ReadWriteIncrementQuirk::IncrementIndex);
 
         chip8.cycle_n(7);
 
@@ -1259,7 +1333,7 @@ mod tests {
     /// When using multiple `Opcode::ReadMemory`'s sequentually we expect it to start reading from
     /// where the previous read stopped.
     #[test]
-    pub fn op_read_memory_consecutive() {
+    pub fn op_read_memory_consecutive_with_quirk() {
         let mut rom: Vec<u8> = Opcode::to_rom(vec![
             Opcode::IndexAddress(0x200 + 6), // Store the address of the first byte below our opcodes
             Opcode::ReadMemory { x: 0x1 },
@@ -1267,7 +1341,8 @@ mod tests {
         ]);
         rom.extend(vec![0xAA, 0xFA, 0x01, 0x02]);
 
-        let mut chip8 = Chip8::new_with_rom(rom);
+        let mut chip8 = Chip8::new_with_rom(rom)
+            .with_read_write_increment_quirk(ReadWriteIncrementQuirk::IncrementIndex);
 
         chip8.cycle_n(3);
 
