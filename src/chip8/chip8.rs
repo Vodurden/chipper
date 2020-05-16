@@ -406,7 +406,7 @@ impl Chip8 {
             // Manipulate `I`
             Opcode::IndexAddress(address) => self.i = address,
             Opcode::AddAddress { x } => self.i += self.v[x as usize] as u16,
-            Opcode::IndexFont { x } => self.i = Chip8::FONT_START + (x as u16 * 5),
+            Opcode::IndexFont { x } => self.i = Chip8::FONT_START + (self.v[x as usize] as u16 * 5),
 
             // Manipulate Memory
             Opcode::WriteMemory { x } => self.op_write_memory(x),
@@ -1203,12 +1203,13 @@ mod tests {
     #[test]
     pub fn op_draw() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::IndexFont { x: 0x0A },
+            Opcode::LoadConstant { x: 0x1, value: 0xA },
+            Opcode::IndexFont { x: 0x1 },
             Opcode::LoadConstant { x: 0x0, value: 0 },
             Opcode::Draw { x: 0x0, y: 0x0, n: 0x5 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(4);
 
         assert_eq!(chip8.gfx_slice(0, 8, 0, 5), [
             [1,1,1,1,0,0,0,0],
@@ -1222,13 +1223,14 @@ mod tests {
     #[test]
     pub fn op_draw_at_offset() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
-            Opcode::IndexFont { x: 0x0A },
+            Opcode::LoadConstant { x: 0x0, value: 0xA },
+            Opcode::IndexFont { x: 0x0 },
             Opcode::LoadConstant { x: 0x0, value: 38 },
             Opcode::LoadConstant { x: 0x1, value: 20 },
             Opcode::Draw { x: 0x0, y: 0x1, n: 0x5 }
         ]));
 
-        chip8.cycle_n(4);
+        chip8.cycle_n(5);
 
         assert_eq!(chip8.gfx_slice(38, 46, 20, 25), [
             [1,1,1,1,0,0,0,0],
