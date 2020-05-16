@@ -69,10 +69,9 @@ impl ChipperUI {
             .map(|x| x.to_string_lossy().into_owned())
             .unwrap_or(String::new().into());
 
-        println!("Current dir: {}", current_dir);
-
         if let Some(file_path) = tinyfiledialogs::open_file_dialog("Choose a Chip 8 ROM", &current_dir, None) {
             self.chip8 = Chip8::new_with_rom_from_file(file_path).expect("Failed to load ROM");
+            self.assembly_window.refresh(&self.assets, &self.chip8);
         }
     }
 
@@ -97,7 +96,7 @@ impl EventHandler for ChipperUI {
             .expect("Failed to set screen coordinates");
     }
 
-    fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {
+    fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, keymods: KeyMods, _repeat: bool) {
         match keycode {
             KeyCode::F2 => self.load_rom_from_dialog(),
             KeyCode::F3 => {
@@ -110,6 +109,11 @@ impl EventHandler for ChipperUI {
                 self.refresh_chip8(ctx, chip8_output)
                     .expect("Failed to refresh chip8");
             },
+            _ => {}
+        }
+
+        match (keymods, keycode) {
+            (KeyMods::SHIFT, KeyCode::F1) => println!("{}", self.chip8.gfx_to_string()),
             _ => {}
         }
     }

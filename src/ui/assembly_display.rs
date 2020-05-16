@@ -1,3 +1,4 @@
+use std::cmp::max;
 use ggez::{Context, GameResult};
 use ggez::graphics::{self, Text, DrawParam, DrawMode, FilterMode, Rect, Mesh, Color};
 
@@ -54,33 +55,7 @@ impl AssemblyDisplay {
         // If the window is not viewing the current instruction we should shift the window
         // and re-generate the text.
         if self.text.is_empty() || chip8.pc < self.window_start_address || chip8.pc > self.window_end_address - 1 {
-            self.window_start_address = chip8.pc - 2;
-            self.window_end_address = chip8.pc + (AssemblyDisplay::NUM_LINES * 2);
-
-            self.text.clear();
-
-            let opcodes = chip8.opcodes(self.window_start_address, self.window_end_address);
-            for (i, (address, opcode)) in opcodes.iter().enumerate() {
-                let origin = Point2::new(
-                    self.x + AssemblyDisplay::PADDING_LEFT,
-                    self.y + ((i as f32) * AssemblyDisplay::LINE_HEIGHT)
-                );
-
-                let address_pos = origin + Vector2::new(AssemblyDisplay::ADDRESS_X_OFFSET, 0.0);
-                let address_text = format!("{:X}", address);
-                let address_text = Text::new((address_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
-                self.text.push((address_pos, address_text));
-
-                let opcode_pos = address_pos + Vector2::new(AssemblyDisplay::OPCODE_X_OFFSET, 0.0);
-                let opcode_text = opcode.to_assembly_name();
-                let opcode_text = Text::new((opcode_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
-                self.text.push((opcode_pos, opcode_text));
-
-                let opcode_arg_pos = opcode_pos + Vector2::new(AssemblyDisplay::OPCODE_ARG_X_OFFSET, 0.0);
-                let opcode_arg_text = opcode.to_assembly_args().unwrap_or(String::new());
-                let opcode_arg_text = Text::new((opcode_arg_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
-                self.text.push((opcode_arg_pos, opcode_arg_text));
-            }
+            self.refresh(assets, chip8);
         }
 
         let pc_window_index = (chip8.pc - self.window_start_address) / 2;
@@ -90,6 +65,36 @@ impl AssemblyDisplay {
         self.pc_highlight = Some(rect);
 
         Ok(())
+    }
+
+    pub fn refresh(&mut self, assets: &Assets, chip8: &Chip8) {
+        self.window_start_address = max(Chip8::PROGRAM_START, chip8.pc - 2);
+        self.window_end_address = chip8.pc + (AssemblyDisplay::NUM_LINES * 2);
+
+        self.text.clear();
+
+        let opcodes = chip8.opcodes(self.window_start_address, self.window_end_address);
+        for (i, (address, opcode)) in opcodes.iter().enumerate() {
+            let origin = Point2::new(
+                self.x + AssemblyDisplay::PADDING_LEFT,
+                self.y + ((i as f32) * AssemblyDisplay::LINE_HEIGHT)
+            );
+
+            let address_pos = origin + Vector2::new(AssemblyDisplay::ADDRESS_X_OFFSET, 0.0);
+            let address_text = format!("{:X}", address);
+            let address_text = Text::new((address_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
+            self.text.push((address_pos, address_text));
+
+            let opcode_pos = address_pos + Vector2::new(AssemblyDisplay::OPCODE_X_OFFSET, 0.0);
+            let opcode_text = opcode.to_assembly_name();
+            let opcode_text = Text::new((opcode_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
+            self.text.push((opcode_pos, opcode_text));
+
+            let opcode_arg_pos = opcode_pos + Vector2::new(AssemblyDisplay::OPCODE_ARG_X_OFFSET, 0.0);
+            let opcode_arg_text = opcode.to_assembly_args().unwrap_or(String::new());
+            let opcode_arg_text = Text::new((opcode_arg_text, assets.debug_font, AssemblyDisplay::FONT_SIZE));
+            self.text.push((opcode_arg_pos, opcode_arg_text));
+        }
     }
 
     pub fn draw(&self, ctx: &mut Context) -> GameResult<()> {

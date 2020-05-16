@@ -356,7 +356,13 @@ impl Chip8 {
         loop {
             if row > (2048 - 64) { break; }
 
-            gfx_string.push_str(&format!("{:?}\n", &self.gfx[row..row+64]));
+            let s: String = self.gfx[row..row+64]
+                .into_iter()
+                .map(|x| ('0' as u8) + x)
+                .map(|x| x as char)
+                .collect();
+            gfx_string.push_str(&s);
+            gfx_string.push_str("\n");
 
             row += 64;
         }
