@@ -158,15 +158,15 @@ pub enum Opcode {
     /// Opcode: `8xy5`
     ///
     /// - Set `Vx` to `Vx - Vy`.
-    /// - Set `VF` to 00 if a borrow occurs, otherwise set `VF` to 00.
-    SubtractYFromX { x: Register, y: Register },
+    /// - Set `VF` to 01 if a borrow _does not_ occur, otherwise set `VF` to 00.
+    SubtractXY { x: Register, y: Register },
 
     /// Assembly: `SUBXY`
     /// Opcode: `8xy7`
     ///
     /// - Set `Vx` to `Vy - Vx`.
-    /// - Set `VF` to 00 if a borrow occurs, otherwise set `VF` to 00.
-    SubtractXFromY { x: Register, y: Register },
+    /// - Set `VF` to 01 if a borrow _does not_ occur, otherwise set `VF` to 00.
+    SubtractYX { x: Register, y: Register },
 
     /// Assembly: `SHR Vx`
     /// Opcode: `8xy6`
@@ -360,8 +360,8 @@ impl Opcode {
             (0x8, x, y, 0x3) => Ok(Opcode::Xor { x, y }),
             (0x8, x, y, 0x4) => Ok(Opcode::Add { x, y }),
             (0x7, x, _, _)   => Ok(Opcode::AddConstant { x, value: (word & 0x00FF) as u8 }),
-            (0x8, x, y, 0x7) => Ok(Opcode::SubtractYFromX { x, y }),
-            (0x8, x, y, 0x5) => Ok(Opcode::SubtractXFromY { x, y }),
+            (0x8, x, y, 0x5) => Ok(Opcode::SubtractXY { x, y }),
+            (0x8, x, y, 0x7) => Ok(Opcode::SubtractYX { x, y }),
             (0x8, x, y, 0x6) => Ok(Opcode::ShiftRight { x, y }),
             (0x8, x, y, 0xE) => Ok(Opcode::ShiftLeft { x, y }),
 
@@ -413,8 +413,8 @@ impl Opcode {
             Opcode::Xor { x, y } => 0x8003 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::Add { x, y } => 0x8004 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::AddConstant { x, value } => 0x7000 | ((*x as u16) << 8) | (*value as u16),
-            Opcode::SubtractYFromX { x, y } => 0x8007 | ((*x as u16) << 8) | ((*y as u16) << 4),
-            Opcode::SubtractXFromY { x, y } => 0x8005 | ((*x as u16) << 8) | ((*y as u16) << 4),
+            Opcode::SubtractXY { x, y } => 0x8005 | ((*x as u16) << 8) | ((*y as u16) << 4),
+            Opcode::SubtractYX { x, y } => 0x8007 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::ShiftRight { x, y } => 0x8006 | ((*x as u16) << 8) | ((*y as u16) << 4),
             Opcode::ShiftLeft { x, y } => 0x800E | ((*x as u16) << 8) | ((*y as u16) << 4),
 
@@ -464,8 +464,8 @@ impl Opcode {
             Opcode::Xor { x: _, y: _ } => "XOR",
             Opcode::Add { x: _, y: _ } => "ADD",
             Opcode::AddConstant { x: _, value: _ } => "ADD",
-            Opcode::SubtractYFromX { x: _, y: _ } => "SUBYX",
-            Opcode::SubtractXFromY { x: _, y: _ } => "SUBXY",
+            Opcode::SubtractXY { x: _, y: _ } => "SUBXY",
+            Opcode::SubtractYX { x: _, y: _ } => "SUBYX",
             Opcode::ShiftRight { x: _, y: _ } => "SHR",
             Opcode::ShiftLeft { x: _, y: _ } => "SHL",
 
@@ -519,8 +519,8 @@ impl Opcode {
             Opcode::Xor { x, y } => fmt_reg_reg(x, y),
             Opcode::Add { x, y } => fmt_reg_reg(x, y),
             Opcode::AddConstant { x, value } => fmt_reg_value(x, value),
-            Opcode::SubtractYFromX { x, y } => fmt_reg_reg(x, y),
-            Opcode::SubtractXFromY { x, y } => fmt_reg_reg(x, y),
+            Opcode::SubtractXY { x, y } => fmt_reg_reg(x, y),
+            Opcode::SubtractYX { x, y } => fmt_reg_reg(x, y),
             Opcode::ShiftRight { x, y } => fmt_reg_reg(x, y),
             Opcode::ShiftLeft { x, y } => fmt_reg_reg(x, y),
 
@@ -655,8 +655,8 @@ mod tests {
     }
 
     #[test]
-    fn to_u16_subtract_x_from_y() {
-        assert_eq!(Opcode::SubtractXFromY { x: 0xA, y: 0xB }.to_u16(), 0x8AB5);
+    fn to_u16_subtract_x_y() {
+        assert_eq!(Opcode::SubtractXY { x: 0xA, y: 0xB }.to_u16(), 0x8AB5);
     }
 
     #[test]
@@ -666,7 +666,7 @@ mod tests {
 
     #[test]
     fn to_u16_subtract_y_from_x() {
-        assert_eq!(Opcode::SubtractYFromX { x: 0xA, y: 0xB }.to_u16(), 0x8AB7);
+        assert_eq!(Opcode::SubtractYX { x: 0xA, y: 0xB }.to_u16(), 0x8AB7);
     }
 
     #[test]
@@ -828,8 +828,8 @@ mod tests {
     }
 
     #[test]
-    fn from_u16_subtract_x_from_y() {
-        assert_eq!(Opcode::from_u16(0x8AB5), Ok(Opcode::SubtractXFromY { x: 0xA, y: 0xB }));
+    fn from_u16_subtract_x_y() {
+        assert_eq!(Opcode::from_u16(0x8AB5), Ok(Opcode::SubtractXY { x: 0xA, y: 0xB }));
     }
 
     #[test]
@@ -838,8 +838,8 @@ mod tests {
     }
 
     #[test]
-    fn from_u16_subtract_y_from_x() {
-        assert_eq!(Opcode::from_u16(0x8AB7), Ok(Opcode::SubtractYFromX { x: 0xA, y: 0xB }));
+    fn from_u16_subtract_y_x() {
+        assert_eq!(Opcode::from_u16(0x8AB7), Ok(Opcode::SubtractYX { x: 0xA, y: 0xB }));
     }
 
     #[test]

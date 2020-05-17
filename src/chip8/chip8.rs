@@ -398,8 +398,8 @@ impl Chip8 {
             Opcode::Xor { x, y } => self.v[x as usize] = self.v[x as usize] ^ self.v[y as usize],
             Opcode::Add { x, y } => self.op_add(x, y),
             Opcode::AddConstant { x, value } => self.v[x as usize] = self.v[x as usize].wrapping_add(value),
-            Opcode::SubtractYFromX { x, y } => self.op_subtract_y_from_x(x, y),
-            Opcode::SubtractXFromY { x, y } => self.op_subtract_x_from_y(x, y),
+            Opcode::SubtractXY { x, y } => self.op_subtract(x, x, y),
+            Opcode::SubtractYX { x, y } => self.op_subtract(x, y, x),
             Opcode::ShiftRight { x, y } => self.op_shift_right(x, y),
             Opcode::ShiftLeft { x, y } => self.op_shift_left(x, y),
 
@@ -473,16 +473,10 @@ impl Chip8 {
         self.v[0xF] = carry as u8;
     }
 
-    fn op_subtract_y_from_x(&mut self, x: Register, y: Register) {
+    fn op_subtract(&mut self, target: Register, x: Register, y: Register) {
         let (result, carry) = self.v[x as usize].overflowing_sub(self.v[y as usize]);
-        self.v[x as usize] = result;
-        self.v[0xF] = carry as u8;
-    }
-
-    fn op_subtract_x_from_y(&mut self, x: Register, y: Register) {
-        let (result, carry) = self.v[y as usize].overflowing_sub(self.v[x as usize]);
-        self.v[x as usize] = result;
-        self.v[0xF] = carry as u8;
+        self.v[target as usize] = result;
+        self.v[0xF] = !carry as u8;
     }
 
     fn op_shift_right(&mut self, x: Register, y: Register) {
@@ -1050,57 +1044,59 @@ mod tests {
     }
 
     #[test]
-    pub fn op_subtract_y_from_x() {
+    pub fn op_subtract_x_y() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::LoadConstant { x: 0x0, value: 0x5 },
             Opcode::LoadConstant { x: 0x1, value: 0x1 },
-            Opcode::SubtractYFromX { x: 0x0, y: 0x1 }
+            Opcode::SubtractXY { x: 0x0, y: 0x1 }
         ]));
 
         chip8.cycle_n(3);
 
         assert_eq!(chip8.v[0x0], 0x4);
+        assert_eq!(chip8.v[0xF], 0x1);
     }
 
     #[test]
-    pub fn op_subtract_y_from_x_overflow() {
+    pub fn op_subtract_x_y_overflow() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::LoadConstant { x: 0x0, value: 0x0 },
             Opcode::LoadConstant { x: 0x1, value: 0x1 },
-            Opcode::SubtractYFromX { x: 0x0, y: 0x1 }
+            Opcode::SubtractXY { x: 0x0, y: 0x1 }
         ]));
 
         chip8.cycle_n(3);
 
         assert_eq!(chip8.v[0x0], 0xFF);
-        assert_eq!(chip8.v[0xF], 0x1);
+        assert_eq!(chip8.v[0xF], 0x0);
     }
 
     #[test]
-    pub fn op_subtract_x_from_y() {
+    pub fn op_subtract_y_x() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::LoadConstant { x: 0x0, value: 0x1 },
             Opcode::LoadConstant { x: 0x1, value: 0x5 },
-            Opcode::SubtractXFromY { x: 0x0, y: 0x1 }
+            Opcode::SubtractYX { x: 0x0, y: 0x1 }
         ]));
 
         chip8.cycle_n(3);
 
         assert_eq!(chip8.v[0x0], 0x4);
+        assert_eq!(chip8.v[0xF], 0x1);
     }
 
     #[test]
-    pub fn op_subtract_x_from_y_overflow() {
+    pub fn op_subtract_y_x_overflow() {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::LoadConstant { x: 0x0, value: 0x1 },
             Opcode::LoadConstant { x: 0x1, value: 0x0 },
-            Opcode::SubtractXFromY { x: 0x0, y: 0x1 }
+            Opcode::SubtractYX { x: 0x0, y: 0x1 }
         ]));
 
         chip8.cycle_n(3);
 
         assert_eq!(chip8.v[0x0], 0xFF);
-        assert_eq!(chip8.v[0xF], 0x1);
+        assert_eq!(chip8.v[0xF], 0x0);
     }
 
     #[test]
