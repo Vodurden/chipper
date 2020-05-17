@@ -1,3 +1,9 @@
+# Introduction
+
+![Image of Chipper](./resources/chipper.png)
+
+`chipper` is a Chip-8 emulator written in Rust.
+
 # References
 
 Here's a list of all the articles I viewed while writing this project, roughly ordered by how much time I spent looking at each one:
