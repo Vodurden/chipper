@@ -4,7 +4,7 @@ use std::path::Path;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-use crate::chip8::{Opcode, Register, Address, Chip8Result};
+use crate::chip8::{Opcode, Register, Address, Chip8Result, Chip8Error};
 use crate::chip8::quirks::{ReadWriteIncrementQuirk, BitShiftQuirk};
 
 /// `Chip8` is the core emulation structure of this project. It implements the memory and opcodes
@@ -269,21 +269,21 @@ impl Chip8 {
     /// - `cycle` some number of times based on the clock speed
     /// - decrement `sound_timer`
     /// - decrement `delay_timer`
-    pub fn tick(&mut self, delta: Duration) -> Chip8Output {
+    pub fn tick(&mut self, delta: Duration) -> Chip8Result<Chip8Output> {
         if self.debug_mode {
-            return Chip8Output::None
+            return Ok(Chip8Output::None)
         }
 
         self.tick_internal(delta)
     }
 
     /// Step the CPU forward by a fixed amount of time.
-    pub fn step(&mut self) -> Chip8Output {
+    pub fn step(&mut self) -> Chip8Result<Chip8Output> {
         self.tick_internal(self.clock_speed)
     }
 
     // Internal implementation of `tick` that ignores `debug_mode`
-    fn tick_internal(&mut self, delta: Duration) -> Chip8Output {
+    fn tick_internal(&mut self, delta: Duration) -> Chip8Result<Chip8Output> {
         self.clock_tick_accumulator += delta;
 
         let mut output = Chip8Output::None;
@@ -297,37 +297,38 @@ impl Chip8 {
                 self.timer_tick_accumulator -= self.timer_speed;
             }
 
-            let cycle_output = self.cycle();
+            let cycle_output = self.cycle()?;
             output = Chip8Output::combine(output, Chip8Output::Tick);
             output = Chip8Output::combine(output, cycle_output);
         }
 
-        output
+        Ok(output)
     }
 
 
     /// Execute one cycle of the chip8 interpreter.
-    pub fn cycle(&mut self) -> Chip8Output {
+    pub fn cycle(&mut self) -> Chip8Result<Chip8Output> {
         if self.state != Chip8State::Running {
-            return Chip8Output::None;
+            return Ok(Chip8Output::None);
         }
 
-        // TODO: Better error handling
-        let opcode = self.read_opcode().expect("Failed to read opcode");
+        let opcode = self.read_opcode()?;
         self.pc += 2;
 
-        self.execute_opcode(opcode.clone());
+        self.execute_opcode(opcode.clone())?;
 
         match opcode {
-            Opcode::Draw { x: _, y: _, n: _ } => Chip8Output::Redraw,
-            _ => Chip8Output::None,
+            Opcode::Draw { x: _, y: _, n: _ } => Ok(Chip8Output::Redraw),
+            _ => Ok(Chip8Output::None),
         }
     }
 
-    pub fn cycle_n(&mut self, times: u32) {
+    pub fn cycle_n(&mut self, times: u32) -> Chip8Result<()> {
         for _ in 0..times {
-            self.cycle();
+            self.cycle()?;
         }
+
+        Ok(())
     }
 
     pub fn gfx_slice(&self, x_start: u8, x_end: u8, y_start: u8, y_end: u8) -> Vec<Vec<u8>> {
@@ -376,11 +377,11 @@ impl Chip8 {
         Opcode::from_bytes(&opcode_bytes)
     }
 
-    fn execute_opcode(&mut self, opcode: Opcode) {
+    fn execute_opcode(&mut self, opcode: Opcode) -> Chip8Result<()> {
         match opcode {
             // Flow Control
             Opcode::CallSubroutine(address) => self.op_call_subroutine(address),
-            Opcode::Return => self.op_return(),
+            Opcode::Return => self.op_return()?,
             Opcode::Jump(address) => self.pc = address,
             Opcode::JumpWithOffset(address) => self.pc = address + (self.v[0] as u16),
 
@@ -424,6 +425,8 @@ impl Chip8 {
             Opcode::ClearScreen => self.gfx = [0; Chip8::SCREEN_PIXELS],
             Opcode::Draw { x, y, n } => self.op_draw(x, y, n),
         }
+
+        Ok(())
     }
 
     fn op_call_subroutine(&mut self, address: Address) {
@@ -431,9 +434,10 @@ impl Chip8 {
         self.pc = address;
     }
 
-    fn op_return(&mut self) {
-        // TODO: Better error handling
-        self.pc = self.stack.pop().expect("Stack Underflow!");
+    fn op_return(&mut self) -> Chip8Result<()> {
+        self.pc = self.stack.pop().ok_or(Chip8Error::StackUnderflow)?;
+
+        Ok(())
     }
 
     fn op_skip_next_if(&mut self, expression: bool) {
@@ -557,7 +561,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle();
+        chip8.cycle().unwrap();
         assert_eq!(chip8.pc, 0x202);
     }
 
@@ -568,7 +572,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.v[0x0], 0x0);
-        chip8.tick(chip8.clock_speed);
+        chip8.tick(chip8.clock_speed).unwrap();
         assert_eq!(chip8.v[0x0], 0xF);
     }
 
@@ -578,7 +582,7 @@ mod tests {
             Opcode::LoadConstant { x: 0x0, value: 0xF }
         ]));
 
-        chip8.tick(Duration::new(0, 0));
+        chip8.tick(Duration::new(0, 0)).unwrap();
         assert_eq!(chip8.v[0x0], 0x0);
     }
 
@@ -590,7 +594,7 @@ mod tests {
             Opcode::LoadConstant { x: 0x2, value: 0xBB },
         ]));
 
-        chip8.tick(chip8.clock_speed * 3);
+        chip8.tick(chip8.clock_speed * 3).unwrap();
         assert_eq!(chip8.v[0x0], 0x05);
         assert_eq!(chip8.v[0x1], 0xAA);
         assert_eq!(chip8.v[0x2], 0xBB);
@@ -607,10 +611,10 @@ mod tests {
             Opcode::Jump(Chip8::PROGRAM_START + 3 * 2)
         ]));
 
-        chip8.tick(chip8.clock_speed * 2);
+        chip8.tick(chip8.clock_speed * 2).unwrap();
         assert_eq!(chip8.sound_timer, 0x8);
 
-        chip8.tick(chip8.timer_speed);
+        chip8.tick(chip8.timer_speed).unwrap();
         assert_eq!(chip8.sound_timer, 0x7);
     }
 
@@ -625,10 +629,10 @@ mod tests {
             Opcode::Jump(Chip8::PROGRAM_START + 3 * 2)
         ]));
 
-        chip8.tick(chip8.clock_speed * 2);
+        chip8.tick(chip8.clock_speed * 2).unwrap();
         assert_eq!(chip8.delay_timer, 0x8);
 
-        chip8.tick(chip8.timer_speed);
+        chip8.tick(chip8.timer_speed).unwrap();
         assert_eq!(chip8.delay_timer, 0x7);
     }
 
@@ -646,7 +650,7 @@ mod tests {
             Opcode::LoadConstant { x: 0xA, value: 0xFF },
         ]));
 
-        chip8.tick(chip8.clock_speed * 2 + chip8.timer_speed * 2 + chip8.clock_speed * 2);
+        chip8.tick(chip8.clock_speed * 2 + chip8.timer_speed * 2 + chip8.clock_speed * 2).unwrap();
         assert_eq!(chip8.v[0xA], 0xFF);
     }
 
@@ -666,7 +670,7 @@ mod tests {
             Opcode::LoadConstant { x: 0x2, value: 0xBB }
         ]));
 
-        chip8.cycle_n(6);
+        chip8.cycle_n(6).unwrap();
 
         assert_eq!(chip8.v[0x1], 0xFF);
         assert_eq!(chip8.v[0xA], 0xAA);
@@ -681,7 +685,7 @@ mod tests {
             Opcode::LoadConstant { x: 0x1, value: 0xFF }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0x0);
         assert_eq!(chip8.v[0x1], 0xFF);
@@ -696,7 +700,7 @@ mod tests {
             Opcode::LoadConstant { x: 0x2, value: 0xFF }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x1], 0x0);
         assert_eq!(chip8.v[0x2], 0xFF);
@@ -709,7 +713,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle();
+        chip8.cycle().unwrap();
         assert_eq!(chip8.pc, 0x204);
     }
 
@@ -720,7 +724,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle();
+        chip8.cycle().unwrap();
         assert_eq!(chip8.pc, 0x202);
     }
 
@@ -731,7 +735,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle();
+        chip8.cycle().unwrap();
         assert_eq!(chip8.pc, 0x204);
     }
 
@@ -744,7 +748,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
         assert_eq!(chip8.pc, 0x208);
     }
 
@@ -757,7 +761,7 @@ mod tests {
         ]));
 
         assert_eq!(chip8.pc, 0x200);
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
         assert_eq!(chip8.pc, 0x208);
     }
 
@@ -772,7 +776,7 @@ mod tests {
         ]));
 
         chip8.press_key(0xA);
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x1], 0x0);
         assert_eq!(chip8.v[0x2], 0xB);
@@ -787,7 +791,7 @@ mod tests {
             Opcode::LoadConstant { x: 0x2, value: 0xB }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x1], 0x0);
         assert_eq!(chip8.v[0x2], 0xB);
@@ -801,12 +805,12 @@ mod tests {
         ]));
 
         chip8.press_key(0xA);
-        chip8.cycle_n(10);
+        chip8.cycle_n(10).unwrap();
         assert_eq!(chip8.v[0x1], 0x0);
 
         chip8.press_key(0x3);
         chip8.release_key(0x3);
-        chip8.cycle_n(1);
+        chip8.cycle_n(1).unwrap();
         assert_eq!(chip8.v[0x1], 0xA);
         assert_eq!(chip8.v[0xA], 0x3);
     }
@@ -816,7 +820,7 @@ mod tests {
         let mut chip8 = Chip8::new_with_rom(Opcode::to_rom(vec![
             Opcode::LoadConstant { x: 0x0, value: 0xF }
         ]));
-        chip8.cycle();
+        chip8.cycle().unwrap();
 
         assert_eq!(chip8.v[0], 0x0F);
     }
@@ -824,7 +828,7 @@ mod tests {
     #[test]
     pub fn op_add_constant() {
         let mut chip8 = Chip8::new_with_rom(vec![0x71, 0x0F]);
-        chip8.cycle();
+        chip8.cycle().unwrap();
 
         assert_eq!(chip8.v[1], 0x0F);
     }
@@ -836,7 +840,7 @@ mod tests {
             Opcode::Load { x: 2, y: 1 }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[2], 0x15);
     }
@@ -847,7 +851,7 @@ mod tests {
             Opcode::IndexAddress(0xFFF)
         ]));
 
-        chip8.cycle();
+        chip8.cycle().unwrap();
 
         assert_eq!(chip8.i, 0xFFF);
     }
@@ -860,7 +864,7 @@ mod tests {
             Opcode::AddAddress { x: 0x0 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.i, 0x2);
     }
@@ -874,7 +878,7 @@ mod tests {
             Opcode::WriteBCD { x: 0 },
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         let address = address as usize;
         assert_eq!(chip8.memory[address..address+3], [0, 0, 3]);
@@ -889,7 +893,7 @@ mod tests {
             Opcode::WriteBCD { x: 0 },
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         let address = address as usize;
         assert_eq!(chip8.memory[address..address+3], [0, 4, 7]);
@@ -904,7 +908,7 @@ mod tests {
             Opcode::WriteBCD { x: 0 },
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         let address = address as usize;
         assert_eq!(chip8.memory[address..address+3], [2, 5, 5]);
@@ -917,7 +921,7 @@ mod tests {
             Opcode::LoadRegisterIntoSound { x: 0 }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.sound_timer, 0x5);
     }
@@ -929,7 +933,7 @@ mod tests {
             Opcode::LoadRegisterIntoDelay { x: 0 }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.delay_timer, 0x5);
     }
@@ -942,7 +946,7 @@ mod tests {
             Opcode::LoadDelayIntoRegister { x: 1 },
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         // Delay only decreases when we use `tick` so it should
         // be what we set
@@ -959,7 +963,7 @@ mod tests {
         let mut chip8 = Chip8::new_with_rom(rom)
             .with_seed(0);
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0], 0x6C);
         assert_eq!(chip8.v[1], 0x67);
@@ -971,7 +975,7 @@ mod tests {
             Opcode::Random { x: 0, mask: 0x0F }
         ]));
 
-        chip8.cycle();
+        chip8.cycle().unwrap();
 
         assert_eq!(chip8.v[0], chip8.v[0] & 0x0F);
     }
@@ -984,7 +988,7 @@ mod tests {
             Opcode::Or { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b11111111);
     }
@@ -997,7 +1001,7 @@ mod tests {
             Opcode::And { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b00000000);
     }
@@ -1010,7 +1014,7 @@ mod tests {
             Opcode::Xor { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b11100111);
     }
@@ -1023,7 +1027,7 @@ mod tests {
             Opcode::Add { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0x3);
     }
@@ -1036,7 +1040,7 @@ mod tests {
             Opcode::Add { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         println!("{:x?}", chip8.v[0x0]);
         assert_eq!(chip8.v[0x0], 0xFE);
@@ -1051,7 +1055,7 @@ mod tests {
             Opcode::SubtractXY { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0x4);
         assert_eq!(chip8.v[0xF], 0x1);
@@ -1065,7 +1069,7 @@ mod tests {
             Opcode::SubtractXY { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0xFF);
         assert_eq!(chip8.v[0xF], 0x0);
@@ -1079,7 +1083,7 @@ mod tests {
             Opcode::SubtractYX { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0x4);
         assert_eq!(chip8.v[0xF], 0x1);
@@ -1093,7 +1097,7 @@ mod tests {
             Opcode::SubtractYX { x: 0x0, y: 0x1 }
         ]));
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0xFF);
         assert_eq!(chip8.v[0xF], 0x0);
@@ -1106,7 +1110,7 @@ mod tests {
             Opcode::ShiftRight { x: 0x0, y: 0x0 }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b00000001);
     }
@@ -1118,7 +1122,7 @@ mod tests {
             Opcode::ShiftRight { x: 0x0, y: 0x0 }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b00000001);
         assert_eq!(chip8.v[0xF], 0x1);
@@ -1133,7 +1137,7 @@ mod tests {
         let mut chip8 = Chip8::new_with_rom(rom)
             .with_bit_shift_quirk(BitShiftQuirk::ShiftYIntoX);
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b00000001);
         assert_eq!(chip8.v[0x1], 0b00000011);
@@ -1147,7 +1151,7 @@ mod tests {
             Opcode::ShiftLeft { x: 0x0, y: 0x0 }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b00000110);
     }
@@ -1159,7 +1163,7 @@ mod tests {
             Opcode::ShiftLeft { x: 0x0, y: 0x0 }
         ]));
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b00000110);
         assert_eq!(chip8.v[0xF], 0x1);
@@ -1174,7 +1178,7 @@ mod tests {
         let mut chip8 = Chip8::new_with_rom(rom)
             .with_bit_shift_quirk(BitShiftQuirk::ShiftYIntoX);
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0b00000110);
         assert_eq!(chip8.v[0x1], 0b10000011);
@@ -1191,7 +1195,7 @@ mod tests {
         rom.extend(vec![0b11110000]);
 
         let mut chip8 = Chip8::new_with_rom(rom);
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.gfx[0..8], [0,0,0,0,0,0,0,0]);
     }
@@ -1205,7 +1209,7 @@ mod tests {
             Opcode::Draw { x: 0x0, y: 0x0, n: 0x5 }
         ]));
 
-        chip8.cycle_n(4);
+        chip8.cycle_n(4).unwrap();
 
         assert_eq!(chip8.gfx_slice(0, 8, 0, 5), [
             [1,1,1,1,0,0,0,0],
@@ -1226,7 +1230,7 @@ mod tests {
             Opcode::Draw { x: 0x0, y: 0x1, n: 0x5 }
         ]));
 
-        chip8.cycle_n(5);
+        chip8.cycle_n(5).unwrap();
 
         assert_eq!(chip8.gfx_slice(38, 46, 20, 25), [
             [1,1,1,1,0,0,0,0],
@@ -1249,9 +1253,9 @@ mod tests {
         rom.extend(vec![0b11110000, 0b01101111]);
 
         let mut chip8 = Chip8::new_with_rom(rom);
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
         assert_eq!(chip8.gfx_slice(0, 8, 0, 1), [[1, 1, 1, 1, 0, 0, 0, 0]]);
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
         assert_eq!(chip8.gfx_slice(0, 8, 0, 1), [[1, 0, 0, 1, 1, 1, 1, 1]]);
     }
 
@@ -1271,9 +1275,9 @@ mod tests {
 
         let mut chip8 = Chip8::new_with_rom(rom);
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
         assert_eq!(chip8.v[0xF], 0);
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
         assert_eq!(chip8.v[0xF], 1);
     }
 
@@ -1287,7 +1291,7 @@ mod tests {
             Opcode::WriteMemory { x: 0x2 }
         ]));
 
-        chip8.cycle_n(5);
+        chip8.cycle_n(5).unwrap();
 
         assert_eq!(chip8.memory[0x200 + 100], 0xFF);
         assert_eq!(chip8.memory[0x200 + 101], 0xAA);
@@ -1311,7 +1315,7 @@ mod tests {
         let mut chip8 = Chip8::new_with_rom(rom)
             .with_read_write_increment_quirk(ReadWriteIncrementQuirk::IncrementIndex);
 
-        chip8.cycle_n(7);
+        chip8.cycle_n(7).unwrap();
 
         assert_eq!(chip8.memory[0x200 + 100 .. 0x200 + 100 + 4], [0xFF, 0xAA, 0x11, 0x21]);
     }
@@ -1326,7 +1330,7 @@ mod tests {
 
         let mut chip8 = Chip8::new_with_rom(rom);
 
-        chip8.cycle_n(2);
+        chip8.cycle_n(2).unwrap();
 
         assert_eq!(chip8.v[0x0], 0xAA);
         assert_eq!(chip8.v[0x1], 0xFA);
@@ -1348,7 +1352,7 @@ mod tests {
         let mut chip8 = Chip8::new_with_rom(rom)
             .with_read_write_increment_quirk(ReadWriteIncrementQuirk::IncrementIndex);
 
-        chip8.cycle_n(3);
+        chip8.cycle_n(3).unwrap();
 
         assert_eq!(chip8.v[0x0], 0x01);
         assert_eq!(chip8.v[0x1], 0x02);

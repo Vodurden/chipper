@@ -139,8 +139,10 @@ impl EventHandler for ChipperUI {
         self.chip8.key(0xB, keyboard::is_key_pressed(ctx, KeyCode::C));
         self.chip8.key(0xF, keyboard::is_key_pressed(ctx, KeyCode::V));
 
+    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         let delta_time = timer::delta(ctx);
-        let chip8_output = self.chip8.tick(delta_time);
+        let chip8_output = self.chip8.tick(delta_time)
+            .expect("Failed to tick chip8"); // TODO: Better error handling
         self.refresh_chip8(ctx, chip8_output)?;
 
         Ok(())

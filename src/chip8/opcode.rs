@@ -26,8 +26,8 @@ use crate::chip8::{Chip8Error, Chip8Result, Register, Address};
 /// | 8xy3   | XOR Vx, Vy        | Manipulate Vx         | Set Vx to Vx XOR Vy                      |
 /// | 8xy4   | ADD Vx, Vy        | Manipulate Vx         | Set Vx to Vx + Vy. Set VF to carry       |
 /// | 7xnn   | ADD Vx, value     | Manipulate Vx         | Set Vx to Vx + value                     |
-/// | 8xy5   | SUBYX Vx, Vy      | Manipulate Vx         | Set Vx to Vx - Vy. Set VF to carry       |
-/// | 8xy7   | SUBXY Vx, Vy      | Manipulate Vx         | Set Vx to Vy - Vx. Set VF to carry       |
+/// | 8xy5   | SUBXY Vx, Vy      | Manipulate Vx         | Set Vx to Vx - Vy. Set VF to carry       |
+/// | 8xy7   | SUBYX Vx, Vy      | Manipulate Vx         | Set Vx to Vy - Vx. Set VF to carry       |
 /// | 8xy6   | SHR Vx            | Manipulate Vx         | Set Vx to Vx >> 1. Set VF to LSB         |
 /// | 8xyE   | SHL Vx            | Manipulate Vx         | Set Vx to Vx << 1. Set VF to MSB         |
 /// | Annn   | IDX addr          | Manipulate I          | Set I to addr                            |
