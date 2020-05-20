@@ -2,8 +2,8 @@ use std::thread;
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::conf::{WindowSetup, WindowMode};
 use ggez::event::{self, EventHandler};
-use ggez::graphics::{self, Rect, FilterMode};
-use ggez::input::keyboard::{self, KeyCode, KeyMods};
+use ggez::graphics::{self, Rect};
+use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::timer;
 use tinyfiledialogs;
 
@@ -31,12 +31,8 @@ impl ChipperUI {
             .build()
             .expect("aieee, could not create ggez context!");
 
-        // Create an instance of your event handler.
-        // Usually, you should provide it with the Context object to
-        // use when setting your game up.
         let mut chipper_ui = ChipperUI::new(&mut ctx);
 
-        // Run!
         match event::run(&mut ctx, &mut event_loop, &mut chipper_ui) {
             Ok(_) => println!("Exited cleanly."),
             Err(e) => println!("Error occured: {}", e)
@@ -44,8 +40,6 @@ impl ChipperUI {
     }
 
     pub fn new(ctx: &mut Context) -> ChipperUI {
-        graphics::set_default_filter(ctx, FilterMode::Nearest);
-
         let assets = Assets::load(ctx);
         let chip8 = Chip8::new_with_default_rom();
         let help_display = HelpDisplay::new(&assets, 20.0, 0.0);
@@ -105,10 +99,34 @@ impl EventHandler for ChipperUI {
             }
             KeyCode::F5 => self.chip8.debug_mode = !self.chip8.debug_mode,
             KeyCode::F6 => {
-                let chip8_output = self.chip8.step();
+                let chip8_output = self.chip8.step()
+                    .expect("Failed to step chip8");
+
                 self.refresh_chip8(ctx, chip8_output)
                     .expect("Failed to refresh chip8");
             },
+
+
+            KeyCode::Key1 => self.chip8.press_key(0x1),
+            KeyCode::Key2 => self.chip8.press_key(0x2),
+            KeyCode::Key3 => self.chip8.press_key(0x3),
+            KeyCode::Key4 => self.chip8.press_key(0xC),
+
+            KeyCode::Q => self.chip8.press_key(0x4),
+            KeyCode::W => self.chip8.press_key(0x5),
+            KeyCode::E => self.chip8.press_key(0x6),
+            KeyCode::R => self.chip8.press_key(0xD),
+
+            KeyCode::A => self.chip8.press_key(0x7),
+            KeyCode::S => self.chip8.press_key(0x8),
+            KeyCode::D => self.chip8.press_key(0x9),
+            KeyCode::F => self.chip8.press_key(0xE),
+
+            KeyCode::Z => self.chip8.press_key(0xA),
+            KeyCode::X => self.chip8.press_key(0x0),
+            KeyCode::C => self.chip8.press_key(0xB),
+            KeyCode::V => self.chip8.press_key(0xF),
+
             _ => {}
         }
 
@@ -118,26 +136,31 @@ impl EventHandler for ChipperUI {
         }
     }
 
-    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
-        self.chip8.key(0x1, keyboard::is_key_pressed(ctx, KeyCode::Key1));
-        self.chip8.key(0x2, keyboard::is_key_pressed(ctx, KeyCode::Key2));
-        self.chip8.key(0x3, keyboard::is_key_pressed(ctx, KeyCode::Key3));
-        self.chip8.key(0xC, keyboard::is_key_pressed(ctx, KeyCode::Key4));
+    fn key_up_event(&mut self, _ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods) {
+        match keycode {
+            KeyCode::Key1 => self.chip8.release_key(0x1),
+            KeyCode::Key2 => self.chip8.release_key(0x2),
+            KeyCode::Key3 => self.chip8.release_key(0x3),
+            KeyCode::Key4 => self.chip8.release_key(0xC),
 
-        self.chip8.key(0x4, keyboard::is_key_pressed(ctx, KeyCode::Q));
-        self.chip8.key(0x5, keyboard::is_key_pressed(ctx, KeyCode::W));
-        self.chip8.key(0x6, keyboard::is_key_pressed(ctx, KeyCode::E));
-        self.chip8.key(0xD, keyboard::is_key_pressed(ctx, KeyCode::R));
+            KeyCode::Q => self.chip8.release_key(0x4),
+            KeyCode::W => self.chip8.release_key(0x5),
+            KeyCode::E => self.chip8.release_key(0x6),
+            KeyCode::R => self.chip8.release_key(0xD),
 
-        self.chip8.key(0x7, keyboard::is_key_pressed(ctx, KeyCode::A));
-        self.chip8.key(0x8, keyboard::is_key_pressed(ctx, KeyCode::S));
-        self.chip8.key(0x9, keyboard::is_key_pressed(ctx, KeyCode::D));
-        self.chip8.key(0xE, keyboard::is_key_pressed(ctx, KeyCode::F));
+            KeyCode::A => self.chip8.release_key(0x7),
+            KeyCode::S => self.chip8.release_key(0x8),
+            KeyCode::D => self.chip8.release_key(0x9),
+            KeyCode::F => self.chip8.release_key(0xE),
 
-        self.chip8.key(0xA, keyboard::is_key_pressed(ctx, KeyCode::Z));
-        self.chip8.key(0x0, keyboard::is_key_pressed(ctx, KeyCode::X));
-        self.chip8.key(0xB, keyboard::is_key_pressed(ctx, KeyCode::C));
-        self.chip8.key(0xF, keyboard::is_key_pressed(ctx, KeyCode::V));
+            KeyCode::Z => self.chip8.release_key(0xA),
+            KeyCode::X => self.chip8.release_key(0x0),
+            KeyCode::C => self.chip8.release_key(0xB),
+            KeyCode::V => self.chip8.release_key(0xF),
+
+            _ => {}
+        }
+    }
 
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         let delta_time = timer::delta(ctx);
