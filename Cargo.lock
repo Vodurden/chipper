@@ -232,6 +232,7 @@ dependencies = [
  "arrayvec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ggez 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nalgebra 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "paste 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand_chacha 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tinyfiledialogs 3.3.9 (registry+https://github.com/rust-lang/crates.io-index)",

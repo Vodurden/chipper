@@ -1,5 +1,3 @@
-use std::fmt;
-
 use crate::chip8::{Chip8Error, Chip8Result, Register, Address};
 
 /// `Opcode` represents a single instruction available on the Chip-8
@@ -319,12 +317,10 @@ impl Opcode {
     }
 
     /// Return the byte representation of this opcode.
-    #[allow(dead_code)]
     pub fn to_bytes(&self) -> [u8; 2] {
         self.to_u16().to_be_bytes()
     }
 
-    #[allow(dead_code)]
     pub fn to_rom(opcodes: Vec<Opcode>) -> Vec<u8> {
         opcodes.iter()
             .flat_map(|op| op.to_bytes().to_vec())
@@ -526,7 +522,7 @@ impl Opcode {
 
             // // Manipulate I
             Opcode::IndexAddress(addr) => fmt_addr(addr),
-            Opcode::AddAddress { x } => fmt_reg(x),
+            Opcode::AddAddress { x } => Some(format!("I, V{:X}", x)),
             Opcode::IndexFont { x } => fmt_reg(x),
 
             // // Manipulate Memory
@@ -546,14 +542,18 @@ impl Opcode {
             Opcode::Draw { x, y, n } => Some(format!("V{:X}, V{:X}, V{:X}", x, y, n)),
         }
     }
-}
 
-impl fmt::Display for Opcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let name = self.to_assembly_name();
-        let args = self.to_assembly_args().unwrap_or(String::new());
+    pub fn to_assembly(&self) -> String {
+        let mut assembly = self.to_assembly_name().to_string();
 
-        write!(f, "{:9} {}", name, args)
+        if let Some(mut args) = self.to_assembly_args() {
+            args.retain(|c| !c.is_whitespace());
+
+            assembly += " ";
+            assembly += &args;
+        }
+
+        assembly
     }
 }
 
@@ -581,349 +581,82 @@ mod tests {
         assert_eq!(rom, [0x00, 0xE0, 0x8A, 0xB4])
     }
 
-    // ======================
-    // = Tests for to_u16 =
-    // ======================
-    #[test]
-    fn to_u16_clear_screen() {
-        assert_eq!(Opcode::ClearScreen.to_u16(), 0x00E0);
-    }
-
-    #[test]
-    fn to_u16_return() {
-        assert_eq!(Opcode::Return.to_u16(), 0x00EE);
-    }
-
-    #[test]
-    fn to_u16_jump() {
-        assert_eq!(Opcode::Jump(0xABC).to_u16(), 0x1ABC);
-    }
-
-    #[test]
-    fn to_u16_call_subroutine() {
-        assert_eq!(Opcode::CallSubroutine(0xABC).to_u16(), 0x2ABC);
-    }
-
-    #[test]
-    fn to_u16_skip_next_if_equal() {
-        assert_eq!(Opcode::SkipNextIfEqual { x: 0xA, value: 0x15 }.to_u16(), 0x3A15);
-    }
-
-    #[test]
-    fn to_u16_skip_next_if_not_equal() {
-        assert_eq!(Opcode::SkipNextIfNotEqual { x: 0xA, value: 0x15 }.to_u16(), 0x4A15);
-    }
-
-    #[test]
-    fn to_u16_skip_next_if_register_equal() {
-        assert_eq!(Opcode::SkipNextIfRegisterEqual { x: 0xA, y: 0xB }.to_u16(), 0x5AB0);
-    }
-
-    #[test]
-    fn to_u16_store_constant() {
-        assert_eq!(Opcode::LoadConstant { x: 0xA, value: 0x10 }.to_u16(), 0x6A10);
-    }
-
-    #[test]
-    fn to_u16_add_constant() {
-        assert_eq!(Opcode::AddConstant { x: 0xA, value: 0x10 }.to_u16(), 0x7A10);
-    }
-
-    #[test]
-    fn to_u16_store() {
-        assert_eq!(Opcode::Load { x: 0xA, y: 0xB }.to_u16(), 0x8AB0);
-    }
-
-    #[test]
-    fn to_u16_or() {
-        assert_eq!(Opcode::Or { x: 0xA, y: 0xB }.to_u16(), 0x8AB1);
-    }
-
-    #[test]
-    fn to_u16_and() {
-        assert_eq!(Opcode::And { x: 0xA, y: 0xB }.to_u16(), 0x8AB2);
-    }
-
-    #[test]
-    fn to_u16_xor() {
-        assert_eq!(Opcode::Xor { x: 0xA, y: 0xB }.to_u16(), 0x8AB3);
-    }
-
-    #[test]
-    fn to_u16_add() {
-        assert_eq!(Opcode::Add { x: 0xA, y: 0xB }.to_u16(), 0x8AB4);
-    }
-
-    #[test]
-    fn to_u16_subtract_x_y() {
-        assert_eq!(Opcode::SubtractXY { x: 0xA, y: 0xB }.to_u16(), 0x8AB5);
-    }
-
-    #[test]
-    fn to_u16_shift_right() {
-        assert_eq!(Opcode::ShiftRight { x: 0xA, y: 0xB }.to_u16(), 0x8AB6);
-    }
-
-    #[test]
-    fn to_u16_subtract_y_from_x() {
-        assert_eq!(Opcode::SubtractYX { x: 0xA, y: 0xB }.to_u16(), 0x8AB7);
-    }
-
-    #[test]
-    fn to_u16_shift_left() {
-        assert_eq!(Opcode::ShiftLeft { x: 0xA, y: 0xB }.to_u16(), 0x8ABE);
-    }
-
-    #[test]
-    fn to_u16_skip_next_if_register_not_equal() {
-        assert_eq!(Opcode::SkipNextIfRegisterNotEqual { x: 0xA, y: 0xB }.to_u16(), 0x9AB0);
-    }
-
-    #[test]
-    fn to_u16_store_address() {
-        assert_eq!(Opcode::IndexAddress(0xABC).to_u16(), 0xAABC);
-    }
-
-    #[test]
-    fn to_u16_jump_with_offset() {
-        assert_eq!(Opcode::JumpWithOffset(0xABC).to_u16(), 0xBABC);
-    }
-
-    #[test]
-    fn to_u16_random() {
-        assert_eq!(Opcode::Random { x: 0x1, mask: 0x52 }.to_u16(), 0xC152);
-    }
-
-    #[test]
-    fn to_u16_draw() {
-        assert_eq!(Opcode::Draw { x: 0xA, y: 0xB, n: 0x1 }.to_u16(), 0xDAB1);
-    }
-
-    #[test]
-    fn to_u16_skip_if_key_pressed() {
-        assert_eq!(Opcode::SkipIfKeyPressed { x: 0xA }.to_u16(), 0xEA9E);
-    }
-
-    #[test]
-    fn to_u16_skip_if_key_not_pressed() {
-        assert_eq!(Opcode::SkipIfKeyNotPressed { x: 0xA }.to_u16(), 0xEAA1);
-    }
-
-    #[test]
-    fn to_u16_wait_for_key_release() {
-        assert_eq!(Opcode::WaitForKeyRelease { x: 0xA }.to_u16(), 0xFA0A);
-    }
-
-    #[test]
-    fn to_u16_store_delay() {
-        assert_eq!(Opcode::LoadDelayIntoRegister { x: 0xA }.to_u16(), 0xFA07);
-    }
-
-    #[test]
-    fn to_u16_set_delay() {
-        assert_eq!(Opcode::LoadRegisterIntoDelay { x: 0xA }.to_u16(), 0xFA15);
-    }
-
-    #[test]
-    fn to_u16_store_sound() {
-        assert_eq!(Opcode::LoadRegisterIntoSound { x: 0xA }.to_u16(), 0xFA18);
-    }
-
-    #[test]
-    fn to_u16_add_address() {
-        assert_eq!(Opcode::AddAddress { x: 0xA }.to_u16(), 0xFA1E);
-    }
-
-    #[test]
-    fn to_u16_set_index_to_font_data() {
-        assert_eq!(Opcode::IndexFont { x: 0xA }.to_u16(), 0xFA29);
-    }
-
-    #[test]
-    fn to_u16_store_bcd() {
-        assert_eq!(Opcode::WriteBCD { x: 0xA }.to_u16(), 0xFA33);
-    }
-
-    #[test]
-    fn to_u16_write_memory() {
-        assert_eq!(Opcode::WriteMemory { x: 0xA }.to_u16(), 0xFA55);
-    }
-
-    #[test]
-    fn to_u16_read_memory() {
-        assert_eq!(Opcode::ReadMemory { x: 0xA }.to_u16(), 0xFA65);
-    }
-
-    // ======================
-    // = Tests for from_u16 =
-    // ======================
-    #[test]
-    fn from_u16_clear_screen() {
-        assert_eq!(Opcode::from_u16(0x00E0), Ok(Opcode::ClearScreen));
-    }
-
-    #[test]
-    fn from_u16_return() {
-        assert_eq!(Opcode::from_u16(0x00EE), Ok(Opcode::Return));
-    }
-
-    #[test]
-    fn from_u16_jump() {
-        assert_eq!(Opcode::from_u16(0x1ABC), Ok(Opcode::Jump(0xABC)));
-    }
-
-    #[test]
-    fn from_u16_call_subroutine() {
-        assert_eq!(Opcode::from_u16(0x2ABC), Ok(Opcode::CallSubroutine(0xABC)));
-    }
-
-    #[test]
-    fn from_u16_skip_next_if_equal() {
-        assert_eq!(Opcode::from_u16(0x3A15), Ok(Opcode::SkipNextIfEqual { x: 0xA, value: 0x15 }));
-    }
-
-    #[test]
-    fn from_u16_skip_next_if_not_equal() {
-        assert_eq!(Opcode::from_u16(0x4A15), Ok(Opcode::SkipNextIfNotEqual { x: 0xA, value: 0x15 }));
-    }
-
-    #[test]
-    fn from_u16_skip_next_if_register_equal() {
-        assert_eq!(Opcode::from_u16(0x5AB0), Ok(Opcode::SkipNextIfRegisterEqual { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_store_constant() {
-        assert_eq!(Opcode::from_u16(0x6A10), Ok(Opcode::LoadConstant { x: 0xA, value: 0x10 }));
-    }
-
-    #[test]
-    fn from_u16_add_constant() {
-        assert_eq!(Opcode::from_u16(0x7A10), Ok(Opcode::AddConstant { x: 0xA, value: 0x10 }));
-    }
-
-    #[test]
-    fn from_u16_store() {
-        assert_eq!(Opcode::from_u16(0x8AB0), Ok(Opcode::Load { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_or() {
-        assert_eq!(Opcode::from_u16(0x8AB1), Ok(Opcode::Or { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_and() {
-        assert_eq!(Opcode::from_u16(0x8AB2), Ok(Opcode::And { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_xor() {
-        assert_eq!(Opcode::from_u16(0x8AB3), Ok(Opcode::Xor { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_add() {
-        assert_eq!(Opcode::from_u16(0x8AB4), Ok(Opcode::Add { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_subtract_x_y() {
-        assert_eq!(Opcode::from_u16(0x8AB5), Ok(Opcode::SubtractXY { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_shift_right() {
-        assert_eq!(Opcode::from_u16(0x8AB6), Ok(Opcode::ShiftRight { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_subtract_y_x() {
-        assert_eq!(Opcode::from_u16(0x8AB7), Ok(Opcode::SubtractYX { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_shift_left() {
-        assert_eq!(Opcode::from_u16(0x8ABE), Ok(Opcode::ShiftLeft { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_skip_next_if_register_not_equal() {
-        assert_eq!(Opcode::from_u16(0x9AB0), Ok(Opcode::SkipNextIfRegisterNotEqual { x: 0xA, y: 0xB }));
-    }
-
-    #[test]
-    fn from_u16_store_address() {
-        assert_eq!(Opcode::from_u16(0xAABC), Ok(Opcode::IndexAddress(0xABC)));
-    }
-
-    #[test]
-    fn from_u16_jump_with_offset() {
-        assert_eq!(Opcode::from_u16(0xBABC), Ok(Opcode::JumpWithOffset(0xABC)));
-    }
-
-    #[test]
-    fn from_u16_random() {
-        assert_eq!(Opcode::from_u16(0xC152), Ok(Opcode::Random { x: 0x1, mask: 0x52 }));
-    }
-
-    #[test]
-    fn from_u16_draw() {
-        assert_eq!(Opcode::from_u16(0xDAB1), Ok(Opcode::Draw { x: 0xA, y: 0xB, n: 0x1 }));
-    }
-
-    #[test]
-    fn from_u16_skip_if_key_pressed() {
-        assert_eq!(Opcode::from_u16(0xEA9E), Ok(Opcode::SkipIfKeyPressed { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_skip_if_key_not_pressed() {
-        assert_eq!(Opcode::from_u16(0xEAA1), Ok(Opcode::SkipIfKeyNotPressed { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_wait_for_key_release() {
-        assert_eq!(Opcode::from_u16(0xFA0A), Ok(Opcode::WaitForKeyRelease { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_store_delay() {
-        assert_eq!(Opcode::from_u16(0xFA07), Ok(Opcode::LoadDelayIntoRegister { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_set_delay() {
-        assert_eq!(Opcode::from_u16(0xFA15), Ok(Opcode::LoadRegisterIntoDelay { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_store_sound() {
-        assert_eq!(Opcode::from_u16(0xFA18), Ok(Opcode::LoadRegisterIntoSound { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_add_address() {
-        assert_eq!(Opcode::from_u16(0xFA1E), Ok(Opcode::AddAddress { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_set_index_to_font_data() {
-        assert_eq!(Opcode::from_u16(0xFA29), Ok(Opcode::IndexFont { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_store_bcd() {
-        assert_eq!(Opcode::from_u16(0xFA33), Ok(Opcode::WriteBCD { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_write_memory() {
-        assert_eq!(Opcode::from_u16(0xFA55), Ok(Opcode::WriteMemory { x: 0xA }));
-    }
-
-    #[test]
-    fn from_u16_read_memory() {
-        assert_eq!(Opcode::from_u16(0xFA65), Ok(Opcode::ReadMemory { x: 0xA }));
-    }
+    /// `opcode_test` generates data-driven tests for all opcodes covering:
+    ///
+    /// - `Opcode::from_u16`
+    /// - `Opcode::to_u16`
+    /// - `Opcode::to_assembly_name`
+    /// - `Opcode::to_assembly_args`
+    ///
+    macro_rules! opcode_tests {
+        ($opcode_name:ident, $opcode:expr, $u16_value:expr, $assembly:expr) => {
+            paste::item! {
+                #[test]
+                fn [<$opcode_name:snake _to_u16>]() {
+                    assert_eq!($opcode.to_u16(), $u16_value);
+                }
+            }
+
+            paste::item! {
+                #[test]
+                fn [<$opcode_name:snake _from_u16>]() {
+                    assert_eq!(Opcode::from_u16($u16_value), Ok($opcode));
+                }
+            }
+
+            paste::item! {
+                #[test]
+                fn [<$opcode_name:snake _to_assembly>]() {
+                    let assembly = $opcode.to_assembly();
+                    assert_eq!(assembly, $assembly);
+                }
+            }
+        }
+    }
+
+    // Flow Control
+    opcode_tests!(CallSubroutine, Opcode::CallSubroutine(0xABC), 0x2ABC, "CALL ABC");
+    opcode_tests!(Return, Opcode::Return, 0x00EE, "RET");
+    opcode_tests!(Jump, Opcode::Jump(0xABC), 0x1ABC, "JUMP ABC");
+    opcode_tests!(JumpWithOffset, Opcode::JumpWithOffset(0xABC), 0xBABC, "JUMP ABC");
+
+    // Conditioonal Execution
+    opcode_tests!(SkipNextIfEqual, Opcode::SkipNextIfEqual { x: 0xA, value: 0x15 }, 0x3A15, "SKIP.EQ VA,15");
+    opcode_tests!(SkipNextIfNotEqual, Opcode::SkipNextIfNotEqual { x: 0xA, value: 0x15 }, 0x4A15, "SKIP.NE VA,15");
+    opcode_tests!(SkipNextIfRegisterEqual, Opcode::SkipNextIfRegisterEqual { x: 0xA, y: 0xB }, 0x5AB0, "SKIP.EQ VA,VB");
+    opcode_tests!(SkipNextIfRegisterNotEqual, Opcode::SkipNextIfRegisterNotEqual { x: 0xA, y: 0xB }, 0x9AB0, "SKIP.NE VA,VB");
+
+    // Manipulate Vx
+    opcode_tests!(LoadConstant, Opcode::LoadConstant { x: 0xA, value: 0x10 }, 0x6A10, "LOAD VA,10");
+    opcode_tests!(Load, Opcode::Load { x: 0xA, y: 0xB }, 0x8AB0, "LOAD VA,VB");
+    opcode_tests!(Or, Opcode::Or { x: 0xA, y: 0xB }, 0x8AB1, "OR VA,VB");
+    opcode_tests!(And, Opcode::And { x: 0xA, y: 0xB }, 0x8AB2, "AND VA,VB");
+    opcode_tests!(Xor, Opcode::Xor { x: 0xA, y: 0xB }, 0x8AB3, "XOR VA,VB");
+    opcode_tests!(Add, Opcode::Add { x: 0xA, y: 0xB }, 0x8AB4, "ADD VA,VB");
+    opcode_tests!(AddConstant, Opcode::AddConstant { x: 0xA, value: 0x10 }, 0x7A10, "ADD VA,10");
+    opcode_tests!(SubtractXY, Opcode::SubtractXY { x: 0xA, y: 0xB }, 0x8AB5, "SUBXY VA,VB");
+    opcode_tests!(SubtractYX, Opcode::SubtractYX { x: 0xA, y: 0xB }, 0x8AB7, "SUBYX VA,VB");
+    opcode_tests!(ShiftRight, Opcode::ShiftRight { x: 0xA, y: 0xB }, 0x8AB6, "SHR VA,VB");
+    opcode_tests!(ShiftLeft, Opcode::ShiftLeft { x: 0xA, y: 0xB }, 0x8ABE, "SHL VA,VB");
+
+    // Manipulate I
+    opcode_tests!(IndexAddress, Opcode::IndexAddress(0xABC), 0xAABC, "IDX ABC");
+    opcode_tests!(AddAddress, Opcode::AddAddress { x: 0xA }, 0xFA1E, "ADD I,VA");
+    opcode_tests!(IndexFont, Opcode::IndexFont { x: 0xA }, 0xFA29, "FONT VA");
+
+    // Manipulate Memory
+    opcode_tests!(WriteBCD, Opcode::WriteBCD { x: 0xA }, 0xFA33, "BCD VA");
+    opcode_tests!(WriteMemory, Opcode::WriteMemory { x: 0xA }, 0xFA55, "WRITE VA");
+    opcode_tests!(ReadMemory, Opcode::ReadMemory { x: 0xA }, 0xFA65, "READ VA");
+
+    // IO
+    opcode_tests!(SkipIfKeyPressed, Opcode::SkipIfKeyPressed { x: 0xA }, 0xEA9E, "SKIP.KEQ VA");
+    opcode_tests!(SkipIfKeyNotPressed, Opcode::SkipIfKeyNotPressed { x: 0xA }, 0xEAA1, "SKIP.KNE VA");
+    opcode_tests!(WaitForKeyRelease, Opcode::WaitForKeyRelease { x: 0xA }, 0xFA0A, "KEY VA");
+    opcode_tests!(LoadDelayIntoRegister, Opcode::LoadDelayIntoRegister { x: 0xA }, 0xFA07, "LOAD VA,DELAY");
+    opcode_tests!(LoadRegisterIntoDelay, Opcode::LoadRegisterIntoDelay { x: 0xA }, 0xFA15, "LOAD DELAY,VA");
+    opcode_tests!(LoadRegisterIntoSound, Opcode::LoadRegisterIntoSound { x: 0xA }, 0xFA18, "LOAD SOUND,VA");
+    opcode_tests!(Random, Opcode::Random { x: 0x1, mask: 0x52 }, 0xC152, "RAND V1,52");
+    opcode_tests!(ClearScreen, Opcode::ClearScreen, 0x00E0, "CLEAR");
+    opcode_tests!(Draw, Opcode::Draw { x: 0xA, y: 0xB, n: 0x1 }, 0xDAB1, "DRAW VA,VB,V1");
 }
