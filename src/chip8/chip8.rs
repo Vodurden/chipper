@@ -1,6 +1,4 @@
 use std::time::Duration;
-use std::fs;
-use std::path::Path;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
@@ -167,20 +165,12 @@ impl Chip8 {
 
     pub fn new_with_default_rom() -> Chip8 {
         // Default ROM: Just loop forever
-        // TODO: Do something fun here
         let default_rom = Opcode::to_rom(vec![
-            Opcode::LoadConstant { x: 0x0, value: 0x0 },
             Opcode::Jump(Chip8::PROGRAM_START)
         ]);
 
         Chip8::new_with_rom(default_rom)
     }
-
-    pub fn new_with_rom_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Chip8> {
-        let rom = fs::read(path)?;
-        Ok(Chip8::new_with_rom(rom))
-    }
-
     /// Returns a Chip8 with _no initialized memory_
     pub fn empty() -> Chip8 {
         Chip8 {

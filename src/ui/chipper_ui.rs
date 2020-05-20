@@ -1,5 +1,7 @@
+use anyhow::{self, Context};
+use std::fs;
 use std::thread;
-use ggez::{Context, ContextBuilder, GameResult};
+use ggez::{self, ContextBuilder, GameResult};
 use ggez::conf::{WindowSetup, WindowMode};
 use ggez::event::{self, EventHandler};
 use ggez::graphics::{self, Rect};
@@ -23,23 +25,21 @@ impl ChipperUI {
     const WIDTH: f32 = RegisterDisplay::WIDTH + Chip8Display::WIDTH + AssemblyDisplay::WIDTH;
     const HEIGHT: f32 = Chip8Display::HEIGHT;
 
-    pub fn run() {
+    pub fn run() -> anyhow::Result<()> {
         // Make a Context.
         let (mut ctx, mut event_loop) = ContextBuilder::new("chipper", "Jake Woods")
             .window_setup(WindowSetup::default().title("Chipper"))
             .window_mode(WindowMode::default().dimensions(ChipperUI::WIDTH, ChipperUI::HEIGHT))
             .build()
-            .expect("aieee, could not create ggez context!");
+            .context("Could not create ggez context!")?;
 
         let mut chipper_ui = ChipperUI::new(&mut ctx);
 
-        match event::run(&mut ctx, &mut event_loop, &mut chipper_ui) {
-            Ok(_) => println!("Exited cleanly."),
-            Err(e) => println!("Error occured: {}", e)
-        }
+        event::run(&mut ctx, &mut event_loop, &mut chipper_ui)
+            .context("Event loop error")
     }
 
-    pub fn new(ctx: &mut Context) -> ChipperUI {
+    pub fn new(ctx: &mut ggez::Context) -> ChipperUI {
         let assets = Assets::load(ctx);
         let chip8 = Chip8::new_with_default_rom();
         let help_display = HelpDisplay::new(&assets, 20.0, 0.0);
@@ -57,19 +57,24 @@ impl ChipperUI {
         }
     }
 
-    fn load_rom_from_dialog(&mut self) {
+    fn load_rom_from_dialog(&mut self) -> anyhow::Result<()> {
         let current_dir = std::env::current_dir()
             .ok()
             .map(|x| x.to_string_lossy().into_owned())
             .unwrap_or(String::new().into());
 
         if let Some(file_path) = tinyfiledialogs::open_file_dialog("Choose a Chip 8 ROM", &current_dir, None) {
-            self.chip8 = Chip8::new_with_rom_from_file(file_path).expect("Failed to load ROM");
+            let rom = fs::read(&file_path)
+                .with_context(|| format!("Failed to read ROM from path: {}", file_path))?;
+
+            self.chip8 = Chip8::new_with_rom(rom);
             self.assembly_window.refresh(&self.assets, &self.chip8);
         }
+
+        Ok(())
     }
 
-    fn refresh_chip8(&mut self, ctx: &mut Context, chip8_output: Chip8Output) -> GameResult<()> {
+    fn refresh_chip8(&mut self, ctx: &mut ggez::Context, chip8_output: Chip8Output) -> GameResult<()> {
         if chip8_output == Chip8Output::Tick || chip8_output == Chip8Output::Redraw {
             self.register_display.update(&self.assets, &self.chip8)?;
             self.assembly_window.update(ctx, &self.assets, &self.chip8)?;
@@ -85,16 +90,16 @@ impl ChipperUI {
 }
 
 impl EventHandler for ChipperUI {
-    fn resize_event(&mut self, ctx: &mut Context, _width: f32, _height: f32) {
+    fn resize_event(&mut self, ctx: &mut ggez::Context, _width: f32, _height: f32) {
         graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, ChipperUI::WIDTH, ChipperUI::HEIGHT))
             .expect("Failed to set screen coordinates");
     }
 
-    fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, keymods: KeyMods, _repeat: bool) {
+    fn key_down_event(&mut self, ctx: &mut ggez::Context, keycode: KeyCode, keymods: KeyMods, _repeat: bool) {
         match keycode {
-            KeyCode::F2 => self.load_rom_from_dialog(),
+            KeyCode::F2 => self.load_rom_from_dialog().expect("Failed to load ROM"),
             KeyCode::F3 => {
-                self.load_rom_from_dialog();
+                self.load_rom_from_dialog().expect("Failed to load ROM");
                 self.chip8.debug_mode = true;
             }
             KeyCode::F5 => self.chip8.debug_mode = !self.chip8.debug_mode,
@@ -136,7 +141,7 @@ impl EventHandler for ChipperUI {
         }
     }
 
-    fn key_up_event(&mut self, _ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods) {
+    fn key_up_event(&mut self, _ctx: &mut ggez::Context, keycode: KeyCode, _keymods: KeyMods) {
         match keycode {
             KeyCode::Key1 => self.chip8.release_key(0x1),
             KeyCode::Key2 => self.chip8.release_key(0x2),
@@ -162,16 +167,16 @@ impl EventHandler for ChipperUI {
         }
     }
 
-    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+    fn update(&mut self, ctx: &mut ggez::Context) -> GameResult<()> {
         let delta_time = timer::delta(ctx);
         let chip8_output = self.chip8.tick(delta_time)
-            .expect("Failed to tick chip8"); // TODO: Better error handling
+            .expect("Failed to tick chip8");
         self.refresh_chip8(ctx, chip8_output)?;
 
         Ok(())
     }
 
-    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
+    fn draw(&mut self, ctx: &mut ggez::Context) -> GameResult<()> {
         graphics::clear(ctx, graphics::BLACK);
 
         self.chip8_display.draw(ctx)?;

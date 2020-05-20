@@ -1,5 +1,8 @@
 use chipper::ChipperUI;
 
 fn main() {
-    ChipperUI::run();
+    match ChipperUI::run() {
+        Ok(_) => {}
+        Err(e) => println!("Error: {}", e)
+    };
 }
