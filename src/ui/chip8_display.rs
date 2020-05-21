@@ -1,8 +1,7 @@
-use arrayvec::ArrayVec;
 use ggez::{Context, GameResult};
 use ggez::graphics::{self, Rect, Mesh, Image, DrawMode, DrawParam, FilterMode};
 
-use crate::chip8::Chip8;
+use crate::chip8::{Chip8, Gpu};
 use crate::ui::{Point2, Vector2};
 
 
@@ -33,7 +32,12 @@ impl Chip8Display {
         let display_image = Chip8Display::generate_display_image(ctx, chip8);
 
         let border_thickness = 1.0;
-        let border = Rect::new(x - border_thickness, y - border_thickness, Chip8Display::WIDTH + border_thickness, Chip8Display::HEIGHT + border_thickness);
+        let border = Rect::new(
+            x - border_thickness,
+            y - border_thickness,
+            Chip8Display::WIDTH + border_thickness,
+            Chip8Display::HEIGHT + border_thickness
+        );
         let border = Mesh::new_rectangle(ctx, DrawMode::stroke(border_thickness), border, graphics::WHITE)
             .expect("Failed to construct border mesh");
 
@@ -56,13 +60,7 @@ impl Chip8Display {
     }
 
     fn generate_display_image(ctx: &mut Context, chip8: &Chip8) -> Image {
-        let frame_buffer: ArrayVec::<[_; Chip8::SCREEN_WIDTH * Chip8::SCREEN_HEIGHT * 4]> =
-            chip8.gfx.iter().flat_map(|pixel| {
-                match pixel {
-                    0 => vec![0x0, 0x0, 0x0, 0x0],
-                    _ => vec![0xFF, 0xFF, 0xFF, 0xFF],
-                }
-            }).collect();
+        let frame_buffer = chip8.gpu.to_rgba(Gpu::BLACK, Gpu::WHITE);
 
         let mut image = Image::from_rgba8(ctx, 64, 32, &frame_buffer)
             .expect("Failed to generate frame buffer");

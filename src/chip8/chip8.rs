@@ -4,6 +4,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::chip8::{Opcode, Register, Address, Chip8Result, Chip8Error};
 use crate::chip8::quirks::{ReadWriteIncrementQuirk, BitShiftQuirk};
+use crate::chip8::gpu::{self, Gpu};
 
 /// `Chip8` is the core emulation structure of this project. It implements the memory and opcodes
 /// of the Chip-8 architecture.
@@ -19,14 +20,7 @@ pub struct Chip8 {
     /// Stack holds the addresses to return to when the current subroutine finishes.
     pub stack: Vec<u16>,
 
-    /// `gfx` represents the Chip-8 display. The Chip-8 has a 64x32 display consisting of an
-    /// empty colour and a filled colour.
-    ///
-    /// If `gfx[y * Chip8::SCREEN_WIDTH + x]` is `0x0` then the pixel at `(x, y)` should be empty,
-    /// otherwise it should be filled.
-    ///
-    /// The specific colour of "filled" and "empty" should be defined by the rendering system.
-    pub gfx: [u8; Chip8::SCREEN_PIXELS],
+    pub gpu: Gpu,
 
     /// The Chip-8 has a 16 charcter keypad:
     ///
@@ -116,10 +110,6 @@ impl Chip8Output {
 }
 
 impl Chip8 {
-    pub const SCREEN_WIDTH: usize = 64;
-    pub const SCREEN_HEIGHT: usize = 32;
-    pub const SCREEN_PIXELS: usize = Chip8::SCREEN_WIDTH * Chip8::SCREEN_HEIGHT;
-
     pub const PROGRAM_START: u16 = 0x200;
     pub const MEMORY: u16 = 4096;
 
@@ -176,7 +166,7 @@ impl Chip8 {
         Chip8 {
             memory: [0; Chip8::MEMORY as usize],
             stack: Vec::new(),
-            gfx: [0; Chip8::SCREEN_PIXELS],
+            gpu: Gpu::new(),
             keys: [false; 16],
 
             v: [0; 16],
@@ -321,46 +311,6 @@ impl Chip8 {
         Ok(())
     }
 
-    pub fn gfx_slice(&self, x_start: u8, x_end: u8, y_start: u8, y_end: u8) -> Vec<Vec<u8>> {
-        let mut gfx_slice = Vec::new();
-
-        for y in y_start..y_end {
-            let mut row = Vec::new();
-
-            for x in x_start..x_end {
-                let y = y as usize;
-                let x = x as usize;
-                row.push(self.gfx[y * Chip8::SCREEN_WIDTH + x] as u8);
-            }
-
-            gfx_slice.push(row);
-        }
-
-        gfx_slice
-
-    }
-
-    pub fn gfx_to_string(&self) -> String {
-        let mut gfx_string = String::new();
-
-        let mut row = 0;
-        loop {
-            if row > (2048 - 64) { break; }
-
-            let s: String = self.gfx[row..row+64]
-                .into_iter()
-                .map(|x| ('0' as u8) + x)
-                .map(|x| x as char)
-                .collect();
-            gfx_string.push_str(&s);
-            gfx_string.push_str("\n");
-
-            row += 64;
-        }
-
-        gfx_string
-    }
-
     fn read_opcode(&self) -> Chip8Result<Opcode> {
         let pc = self.pc as usize;
         let opcode_bytes = [self.memory[pc], self.memory[pc+1]];
@@ -412,7 +362,7 @@ impl Chip8 {
             Opcode::LoadRegisterIntoDelay { x } => self.delay_timer = self.v[x as usize],
             Opcode::LoadRegisterIntoSound { x } => self.sound_timer = self.v[x as usize],
             Opcode::Random { x, mask } => self.op_rand(x, mask),
-            Opcode::ClearScreen => self.gfx = [0; Chip8::SCREEN_PIXELS],
+            Opcode::ClearScreen => self.gpu.clear(),
             Opcode::Draw { x, y, n } => self.op_draw(x, y, n),
         }
 
@@ -496,26 +446,14 @@ impl Chip8 {
     }
 
     fn op_draw(&mut self, x: Register, y: Register, n: u8) {
-        self.v[0xF] = 0;
-        let x = self.v[x as usize];
-        let y = self.v[y as usize];
 
-        for pixel_y in 0..n {
-            let row_sprite: u8 = self.memory[(self.i + pixel_y as u16) as usize];
-            let y = (y + pixel_y) as usize % Chip8::SCREEN_HEIGHT;
+        let x = self.v[x as usize] as usize;
+        let y = self.v[y as usize] as usize;
+        let sprite: Vec<u8> = (0..n).map(|y| self.memory[(self.i + y as u16) as usize]).collect();
 
-            for pixel_x in 0..8 {
-                let bit = (row_sprite >> (7 - pixel_x)) & 0x1;
-                if bit != 0 {
-                    let x = (x + pixel_x) as usize % Chip8::SCREEN_WIDTH;
-                    let pixel: &mut u8 = &mut self.gfx[(y * Chip8::SCREEN_WIDTH) + x];
-                    if *pixel == 1 {
-                        self.v[0xF] = 1;
-                    }
-
-                    *pixel ^= 1;
-                }
-            }
+        match self.gpu.draw(x, y, sprite) {
+            gpu::DrawResult::NoCollision => self.v[0xF] = 0,
+            gpu::DrawResult::Collision => self.v[0xF] = 1
         }
     }
 
@@ -1187,7 +1125,7 @@ mod tests {
         let mut chip8 = Chip8::new_with_rom(rom);
         chip8.cycle_n(3).unwrap();
 
-        assert_eq!(chip8.gfx[0..8], [0,0,0,0,0,0,0,0]);
+        assert_eq!(chip8.gpu.to_gfx_slice(0, 8, 0, 1), [[0,0,0,0,0,0,0,0]]);
     }
 
     #[test]
@@ -1201,7 +1139,7 @@ mod tests {
 
         chip8.cycle_n(4).unwrap();
 
-        assert_eq!(chip8.gfx_slice(0, 8, 0, 5), [
+        assert_eq!(chip8.gpu.to_gfx_slice(0, 8, 0, 5), [
             [1,1,1,1,0,0,0,0],
             [1,0,0,1,0,0,0,0],
             [1,1,1,1,0,0,0,0],
@@ -1222,7 +1160,7 @@ mod tests {
 
         chip8.cycle_n(5).unwrap();
 
-        assert_eq!(chip8.gfx_slice(38, 46, 20, 25), [
+        assert_eq!(chip8.gpu.to_gfx_slice(38, 8, 20, 5), [
             [1,1,1,1,0,0,0,0],
             [1,0,0,1,0,0,0,0],
             [1,1,1,1,0,0,0,0],
@@ -1244,9 +1182,9 @@ mod tests {
 
         let mut chip8 = Chip8::new_with_rom(rom);
         chip8.cycle_n(3).unwrap();
-        assert_eq!(chip8.gfx_slice(0, 8, 0, 1), [[1, 1, 1, 1, 0, 0, 0, 0]]);
+        assert_eq!(chip8.gpu.to_gfx_slice(0, 8, 0, 1), [[1, 1, 1, 1, 0, 0, 0, 0]]);
         chip8.cycle_n(2).unwrap();
-        assert_eq!(chip8.gfx_slice(0, 8, 0, 1), [[1, 0, 0, 1, 1, 1, 1, 1]]);
+        assert_eq!(chip8.gpu.to_gfx_slice(0, 8, 0, 1), [[1, 0, 0, 1, 1, 1, 1, 1]]);
     }
 
     /// When `draw` overlaps a sprite we expect it to delete the existing pixels and sets `VF` to `1`.

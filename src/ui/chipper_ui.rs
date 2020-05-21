@@ -136,7 +136,7 @@ impl EventHandler for ChipperUI {
         }
 
         match (keymods, keycode) {
-            (KeyMods::SHIFT, KeyCode::F1) => println!("{}", self.chip8.gfx_to_string()),
+            (KeyMods::SHIFT, KeyCode::F1) => println!("{:?}", self.chip8.gpu),
             _ => {}
         }
     }
